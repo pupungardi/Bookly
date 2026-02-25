@@ -1,0 +1,5 @@
+{
+  "name": "Bookly",
+  "description": "A simple, friendly, and modern book reading application with offline support.",
+  "requestFramePermissions": []
+}
