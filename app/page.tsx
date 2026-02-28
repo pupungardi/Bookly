@@ -1,22 +1,25 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Image from 'next/image';
 import { Book, UserState } from '@/types/book';
 import Navbar from '@/components/Navbar';
 import BookCard from '@/components/BookCard';
 import BookDetail from '@/components/BookDetail';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, motion } from 'motion/react';
+import { useRouter } from 'next/navigation';
 
 const ContinueReading = dynamic(() => import('@/components/ContinueReading'), { ssr: false });
 const BookReader = dynamic(() => import('@/components/BookReader'), { ssr: false });
-import { BookOpen, SearchX, Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { BookOpen, Heart, Download, SearchX, Filter, ChevronLeft, ChevronRight, Loader2, CircleUserRound, Search } from 'lucide-react';
 import { fetchBooks } from '@/lib/api';
+import { NavBar } from '@/components/ui/tubelight-navbar';
+import ProfileModal from '@/components/ProfileModal';
 
 export default function Home() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'bookmarks' | 'downloads'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'bookmarks' | 'downloads' | 'search'>('all');
   const [readingBook, setReadingBook] = useState<Book | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [apiBooks, setApiBooks] = useState<Book[]>([]);
@@ -28,6 +31,7 @@ export default function Home() {
   const [year, setYear] = useState('');
   const [bookToDownload, setBookToDownload] = useState<Book | null>(null);
   const [offlineSort, setOfflineSort] = useState<'date_desc' | 'date_asc' | 'title_asc' | 'title_desc' | 'author_asc' | 'author_desc'>('date_desc');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   // User State
   const [userState, setUserState] = useState<UserState>({
@@ -35,7 +39,13 @@ export default function Home() {
     downloads: [],
     lastRead: {},
     fontSize: 18,
+    reviews: {},
   });
+
+  const navItems = [
+    { name: 'All Books', id: 'all', icon: BookOpen },
+    { name: 'Search', id: 'search', icon: Search },
+  ];
 
   // Handle hydration and load state
   useEffect(() => {
@@ -71,11 +81,11 @@ export default function Home() {
     
     setIsLoading(true);
     const { books, totalPages: total } = await fetchBooks({
+      page: currentPage,
       keyword: searchQuery,
       genre: genre,
       sort: sort,
-      year: year,
-      page: currentPage
+      year: year
     });
     setApiBooks(books);
     setTotalPages(total);
@@ -109,13 +119,33 @@ export default function Home() {
     setCurrentPage(1);
   };
 
-  const handleTabChange = (tab: 'all' | 'bookmarks' | 'downloads') => {
-    setActiveTab(tab);
+  const handleLogin = (username: string, email: string) => {
+    setUserState(prev => ({
+      ...prev,
+      username,
+      email
+    }));
+  };
+
+  const handleLogout = () => {
+    setUserState(prev => {
+      const { username, email, ...rest } = prev;
+      return rest as UserState;
+    });
+    setIsProfileOpen(false);
+  };
+
+  const handleTabChange = (tab: string) => {
+    if (tab === 'profile') {
+      setIsProfileOpen(true);
+      return;
+    }
+    setActiveTab(tab as any);
     setCurrentPage(1);
   };
 
   const displayBooks = useMemo(() => {
-    if (activeTab === 'all') return apiBooks;
+    if (activeTab === 'all' || activeTab === 'search') return apiBooks;
     
     if (activeTab === 'bookmarks') {
       // For bookmarks, we show what we have in apiBooks or downloads
@@ -126,12 +156,12 @@ export default function Home() {
       return Array.from(new Map(combined.map(item => [item.id, item])).values());
     }
     if (activeTab === 'downloads') {
-      let sorted = [...userState.downloads];
+      let sorted = [...(userState.downloads || [])];
       switch (offlineSort) {
-        case 'title_asc': sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
-        case 'title_desc': sorted.sort((a, b) => b.title.localeCompare(a.title)); break;
-        case 'author_asc': sorted.sort((a, b) => a.author.localeCompare(b.author)); break;
-        case 'author_desc': sorted.sort((a, b) => b.author.localeCompare(a.author)); break;
+        case 'title_asc': sorted.sort((a, b) => (a?.judul || '').localeCompare(b?.judul || '')); break;
+        case 'title_desc': sorted.sort((a, b) => (b?.judul || '').localeCompare(a?.judul || '')); break;
+        case 'author_asc': sorted.sort((a, b) => (a?.genre || '').localeCompare(b?.genre || '')); break;
+        case 'author_desc': sorted.sort((a, b) => (b?.genre || '').localeCompare(a?.genre || '')); break;
         case 'date_asc': break;
         case 'date_desc': sorted.reverse(); break;
       }
@@ -159,6 +189,26 @@ export default function Home() {
     } else {
       setBookToDownload(book);
     }
+  };
+
+  const addReview = (bookId: string, rating: number, text: string) => {
+    setUserState(prev => {
+      const currentReviews = prev.reviews?.[bookId] || [];
+      const newReview = {
+        id: Math.random().toString(36).substring(2, 9),
+        rating,
+        text,
+        date: new Date().toISOString(),
+        username: prev.username || 'Anonymous',
+      };
+      return {
+        ...prev,
+        reviews: {
+          ...prev.reviews,
+          [bookId]: [newReview, ...currentReviews],
+        }
+      };
+    });
   };
 
   const confirmDownload = () => {
@@ -197,15 +247,29 @@ export default function Home() {
   const genres = ['Drama', 'Fiction', 'Self-Improvement', 'MetroPop', 'Literary', 'Mysteries & Thrillers', 'Science & Nature', 'Poetry', 'Culture', 'Picture Books'];
 
   return (
-    <main className="min-h-screen pb-20">
+    <main className="min-h-screen pb-24">
       <Navbar 
-        searchQuery={searchQuery} 
-        setSearchQuery={handleSearchChange} 
         activeTab={activeTab} 
         setActiveTab={handleTabChange} 
+        onProfileClick={() => setIsProfileOpen(true)}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Search Input Section */}
+        {activeTab === 'search' && (
+          <div className="mb-8 relative max-w-2xl mx-auto">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={20} />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Search title or author..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 bg-white border border-stone-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none text-lg text-stone-800 placeholder:text-stone-400"
+            />
+          </div>
+        )}
+
         {/* Continue Reading Section */}
         {activeTab === 'all' && lastReadBook && !searchQuery && !genre && currentPage === 1 && (
           <ContinueReading 
@@ -267,7 +331,7 @@ export default function Home() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <h2 className="text-2xl font-serif font-bold text-stone-900">
-              {activeTab === 'all' ? 'Featured Books' : activeTab === 'bookmarks' ? 'Your Bookmarks' : 'Offline Library'}
+              {activeTab === 'all' ? 'Featured Books' : activeTab === 'bookmarks' ? 'Your Wishlist' : 'Offline Library'}
             </h2>
             {activeTab === 'downloads' && (
               <select 
@@ -293,17 +357,21 @@ export default function Home() {
         {/* Book Grid */}
         <div id="book-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 min-h-[400px]">
           <AnimatePresence mode="popLayout">
-            {!isLoading && displayBooks.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                isBookmarked={userState.bookmarks.includes(book.id)}
-                isDownloaded={userState.downloads.some(b => b.id === book.id)}
-                onToggleBookmark={toggleBookmark}
-                onToggleDownload={toggleDownload}
-                onRead={setReadingBook}
-                onShowDetail={setSelectedBook}
-              />
+            {!isLoading && (displayBooks || []).map((book, index) => (
+              book && (
+                <BookCard
+                  key={book.id || index}
+                  book={book}
+                  isBookmarked={userState.bookmarks.includes(book.id)}
+                  isDownloaded={userState.downloads.some(b => b.id === book.id)}
+                  onToggleBookmark={toggleBookmark}
+                  onToggleDownload={toggleDownload}
+                  onRead={setReadingBook}
+                  onShowDetail={setSelectedBook}
+                  priority={index < 4}
+                  reviews={userState.reviews?.[book.id] || []}
+                />
+              )
             ))}
           </AnimatePresence>
           
@@ -367,6 +435,8 @@ export default function Home() {
             onToggleBookmark={toggleBookmark}
             isDownloaded={userState.downloads.some(b => b.id === selectedBook.id)}
             onToggleDownload={toggleDownload}
+            reviews={userState.reviews?.[selectedBook.id] || []}
+            onAddReview={(rating, text) => addReview(selectedBook.id, rating, text)}
           />
         )}
       </AnimatePresence>
@@ -423,6 +493,53 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+      <NavBar 
+        items={navItems} 
+        activeTab={activeTab} 
+        onTabChange={handleTabChange} 
+      />
+      <ProfileModal 
+        isOpen={isProfileOpen} 
+        onClose={() => setIsProfileOpen(false)} 
+        username={userState.username}
+        email={userState.email}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        onWishlistClick={() => {
+          setIsProfileOpen(false);
+          setActiveTab('bookmarks');
+          setCurrentPage(1);
+        }}
+        onDownloadOfflineClick={() => {
+          setIsProfileOpen(false);
+          setActiveTab('downloads');
+          setCurrentPage(1);
+        }}
+        onTransaksiClick={() => {
+          setIsProfileOpen(false);
+          router.push('/transaksi');
+        }}
+        onAkunClick={() => {
+          setIsProfileOpen(false);
+          router.push('/akun');
+        }}
+        onLiveChatClick={() => {
+          setIsProfileOpen(false);
+          router.push('/live-chat');
+        }}
+        onSyaratKetentuanClick={() => {
+          setIsProfileOpen(false);
+          router.push('/syarat-ketentuan');
+        }}
+        onKebijakanPrivasiClick={() => {
+          setIsProfileOpen(false);
+          router.push('/kebijakan-privasi');
+        }}
+        onProfileClick={() => {
+          setIsProfileOpen(false);
+          router.push('/profile');
+        }}
+      />
     </main>
   );
 }

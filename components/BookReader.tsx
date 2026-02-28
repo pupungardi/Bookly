@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { X, Type, Minus, Plus, Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Book } from '@/types/book';
 import { motion, AnimatePresence } from 'motion/react';
 import { Document, Page, pdfjs } from 'react-pdf';
+
+// Import styles for react-pdf@7
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Configure worker for pdfjs-dist@3
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface BookReaderProps {
   book: Book;
@@ -32,24 +35,32 @@ export default function BookReader({
   initialProgress = 0,
   onProgressChange
 }: BookReaderProps) {
-  const [fontSize, setFontSize] = React.useState(initialFontSize);
-  const [progress, setProgress] = React.useState(initialProgress);
-  const [scrollY, setScrollY] = React.useState(0);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const hasSetInitialScroll = React.useRef(false);
+  const [fontSize, setFontSize] = useState(initialFontSize);
+  const [progress, setProgress] = useState(initialProgress);
+  const [scrollY, setScrollY] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const hasSetInitialScroll = useRef(false);
 
   // PDF state
   const [numPages, setNumPages] = useState<number>();
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [pdfScale, setPdfScale] = useState<number>(1.0);
 
+  const [error, setError] = useState<string | null>(null);
+
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
     setPageNumber(1);
+    setError(null);
+  }
+
+  function onDocumentLoadError(err: Error) {
+    console.error('PDF load error:', err);
+    setError('Failed to load PDF. Please check your connection or try again later.');
   }
 
   // Set initial scroll position based on progress
-  React.useEffect(() => {
+  useEffect(() => {
     if (scrollRef.current && !hasSetInitialScroll.current) {
       const totalScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
       if (totalScroll > 0) {
@@ -60,7 +71,7 @@ export default function BookReader({
   }, [initialProgress]);
 
   // Debounced progress handler
-  const handleProgressUpdate = React.useCallback(() => {
+  const handleProgressUpdate = useCallback(() => {
     if (scrollRef.current) {
       const currentScroll = scrollRef.current.scrollTop;
       const totalScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
@@ -72,7 +83,7 @@ export default function BookReader({
   }, [onProgressChange]);
 
   // Use a local timer for debouncing to avoid excessive parent updates
-  const scrollTimer = React.useRef<NodeJS.Timeout | null>(null);
+  const scrollTimer = useRef<NodeJS.Timeout | null>(null);
   const onScrollThrottled = (e: React.UIEvent<HTMLDivElement>) => {
     setScrollY(e.currentTarget.scrollTop);
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
@@ -99,8 +110,8 @@ export default function BookReader({
             <X size={24} />
           </button>
           <div>
-            <h2 className="font-serif font-bold text-stone-900 leading-none">{book.title}</h2>
-            <p className="text-xs text-stone-500 mt-1">{book.author}</p>
+            <h2 className="font-serif font-bold text-stone-900 leading-none">{book?.judul || 'Untitled Book'}</h2>
+            <p className="text-xs text-stone-500 mt-1">{book?.genre || 'Uncategorized'}</p>
           </div>
         </div>
 
@@ -144,16 +155,23 @@ export default function BookReader({
                 style={{ transform: `translateY(${scrollY * 0.3}px)` }}
               >
                 <Image 
-                  src={book.cover} 
-                  alt={book.title} 
+                  src={
+                    book?.cover && typeof book.cover === 'string' && book.cover.startsWith('http')
+                      ? book.cover
+                      : '/images/placeholder-book.jpg'
+                  } 
+                  alt={book?.judul || 'Book Cover'} 
                   fill 
+                  unoptimized
                   sizes="192px"
                   className="object-cover" 
                   referrerPolicy="no-referrer"
+                  placeholder="blur"
+                  blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg=="
                 />
               </div>
-              <h1 className="font-serif text-4xl font-bold text-stone-900 mb-2 relative z-10">{book.title}</h1>
-              <p className="text-stone-500 italic relative z-10">by {book.author}</p>
+              <h1 className="font-serif text-4xl font-bold text-stone-900 mb-2 relative z-10">{book?.judul || 'Untitled Book'}</h1>
+              <p className="text-stone-500 italic relative z-10">in {book?.genre || 'Uncategorized'}</p>
               <div className="w-12 h-1 bg-emerald-500 mx-auto mt-6 rounded-full relative z-10" />
             </div>
           )}
@@ -161,24 +179,37 @@ export default function BookReader({
           {book.pdfUrl ? (
             book.pdfUrl.endsWith('.pdf') ? (
               <div className="w-full h-full flex flex-col items-center bg-stone-100 overflow-y-auto">
-                <Document
-                  file={book.pdfUrl}
-                  onLoadSuccess={onDocumentLoadSuccess}
-                  className="flex flex-col items-center py-8"
-                  loading={
-                    <div className="flex items-center justify-center h-64">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-                    </div>
-                  }
-                >
-                  <Page 
-                    pageNumber={pageNumber} 
-                    scale={pdfScale}
-                    className="shadow-xl"
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                  />
-                </Document>
+                {error ? (
+                  <div className="flex flex-col items-center justify-center h-64 p-8 text-center">
+                    <p className="text-red-500 font-medium mb-4">{error}</p>
+                    <button 
+                      onClick={() => setError(null)}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <Document
+                    file={book.pdfUrl}
+                    onLoadSuccess={onDocumentLoadSuccess}
+                    onLoadError={onDocumentLoadError}
+                    className="flex flex-col items-center py-8"
+                    loading={
+                      <div className="flex items-center justify-center h-64">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+                      </div>
+                    }
+                  >
+                    <Page 
+                      pageNumber={pageNumber} 
+                      scale={pdfScale}
+                      className="shadow-xl"
+                      renderTextLayer={true}
+                      renderAnnotationLayer={true}
+                    />
+                  </Document>
+                )}
               </div>
             ) : (
               <div className="w-full h-full">

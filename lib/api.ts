@@ -51,13 +51,31 @@ export async function fetchBooks(params: FetchBooksParams = {}): Promise<{ books
       "DISNEY FROZEN: PERMAINAN ES - CERITA SERU DAN AKTIVITAS",
       "Inside Out 2: Kepikiran (All in the Mind)",
       "The Character Gap",
-      "Peta Sejarah Tiongkok"
+      "Peta Sejarah Tiongkok",
+      "BTS Lyrics Inside (Indonesian Edition)",
+      "Mickey 7",
+      "Dongeng Klasik Dunia 1 oleh Grimm Bersaudara",
+      "Dongeng Klasik Dunia 2 oleh Hans Christian Andersen",
+      "Unforgettable Hotel",
+      "Di Balik Jendela",
+      "Meal Plan 30 Hari Ala Dila Shina",
+      "Second Hope",
+      "Batik as My Identity (Batik Sebagai Jati Diriku)",
+      "Sisi Tergelap Surga",
+      "Tangled: Sahabat Sejati",
+      "Daisy",
+      "The Same Sky",
+      "Frozen 1001 Stickers",
+      "Disney Princess Dunia Ajaib: Buku Aktivitas Cari & Temukan",
+      "Disney Princess: Buku Tahunan 2021",
+      "Beauty and the Beast: Selamat Datang"
     ];
     
     // Filter out books without a cover image or with known broken images
     const filteredBooks = data.books.filter((b: any) => {
       const hasCover = b.cover_image && b.cover_image.trim() !== "";
-      const isNotBroken = !brokenTitles.includes(b.title);
+      const isNotBroken = !brokenTitles.includes(b.title) && 
+                         b.cover_image !== "https://gpu.id/data-gpu/images/img-book/94307/Anak_-_Beauty_and_the_Beast_Selamat_Datang.jpg";
       return hasCover && isNotBroken;
     });
     
@@ -126,15 +144,17 @@ export async function fetchBooks(params: FetchBooksParams = {}): Promise<{ books
 
       let pdfUrl = undefined;
       if (b.title === "Jejak Balak") {
-        pdfUrl = "https://jejak-balak-ayu-welirang-z-library-sk-1lib-sk-z-lib-sk.tiiny.site/Jejak-Balak-Ayu-Welirang-z-library-sk,-1lib-sk,-z-lib-sk.pdf";
+        pdfUrl = "https://vajvsjhfqmxckupiyoih.supabase.co/storage/v1/object/public/Books/Jejak%20Balak%20(Ayu%20Welirang)%20(z-library.sk,%201lib.sk,%20z-lib.sk).pdf";
       }
 
       return {
         id: b._id,
+        judul: b.title || 'Untitled Book',
+        genre: b.category?.name || b.category || 'Uncategorized',
+        cover: b.cover_image || 'https://picsum.photos/400/600',
+        deskripsi: b.summary || b.description || 'No description available.',
         title: b.title,
         author: b.author?.name || b.author || 'Unknown Author',
-        cover: b.cover_image || 'https://picsum.photos/400/600',
-        description: b.summary || b.description || 'No description available.',
         content: (b.summary || b.description || 'No content available.').replace(/WASPADA!AWASI/g, 'WASPADA! AWASI'),
         category: b.category?.name || b.category || 'Uncategorized',
         year: year,

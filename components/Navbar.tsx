@@ -1,99 +1,50 @@
 'use client';
 
 import React from 'react';
-import { Search, BookOpen, Bookmark, Download, Menu, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { CircleUserRound } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface NavbarProps {
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  activeTab: 'all' | 'bookmarks' | 'downloads';
-  setActiveTab: (tab: 'all' | 'bookmarks' | 'downloads') => void;
+  activeTab: string;
+  setActiveTab: (tab: 'all' | 'bookmarks' | 'downloads' | 'search') => void;
+  onProfileClick: () => void;
 }
 
-export default function Navbar({ searchQuery, setSearchQuery, activeTab, setActiveTab }: NavbarProps) {
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-
-  const tabs = [
-    { id: 'all', label: 'All Books', icon: BookOpen },
-    { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark },
-    { id: 'downloads', label: 'Offline', icon: Download },
-  ] as const;
-
+export default function Navbar({ activeTab, setActiveTab, onProfileClick }: NavbarProps) {
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-stone-200 px-4 py-3">
+    <nav className="relative z-50 bg-white border-b border-stone-200 px-4 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('all')}>
-          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-            <BookOpen size={24} />
+        {/* Logo Section */}
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('all')}>
+          <div className="relative w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200/50 overflow-hidden group-hover:scale-105 transition-transform">
+            {/* Stylized Book Logo */}
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 relative z-10">
+              <path d="M16 6C16 6 11.5 3 6 3C4.5 3 3 3.5 3 5V25C4.5 24 6 23.5 8 23.5C11.5 23.5 16 26 16 26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M16 6C16 6 20.5 3 26 3C27.5 3 29 3.5 29 5V25C27.5 24 26 23.5 24 23.5C20.5 23.5 16 26 16 26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M16 6V26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M9 10H12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M20 10H23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M9 14H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M19 14H23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-white/20 rounded-full blur-md"></div>
           </div>
-          <span className="text-2xl font-serif font-bold tracking-tight text-emerald-900 hidden sm:block">Bookly</span>
+          <span className="text-2xl font-serif font-bold tracking-tight text-stone-800 hidden sm:block">
+            Book<span className="text-emerald-600">ly</span>
+          </span>
         </div>
 
-        <div className="flex-1 max-w-md relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search title or author..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-stone-100 border-none rounded-full focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none text-sm"
-          />
-        </div>
+        {/* Spacer */}
+        <div className="flex-1 mx-2"></div>
 
-        <div className="hidden md:flex items-center gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'text-stone-500 hover:bg-stone-50'
-              }`}
-            >
-              <tab.icon size={18} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
+        {/* Profile Button */}
         <button 
-          className="md:hidden p-2 text-stone-600"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          onClick={onProfileClick}
+          className="w-10 h-10 rounded-full bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-500 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shrink-0"
         >
-          {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          <CircleUserRound size={20} strokeWidth={2} />
         </button>
       </div>
-
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-stone-200 p-4 flex flex-col gap-2 shadow-xl"
-          >
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setIsMenuOpen(false);
-                }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'text-stone-500 hover:bg-stone-50'
-                }`}
-              >
-                <tab.icon size={20} />
-                {tab.label}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </nav>
   );
 }

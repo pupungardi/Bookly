@@ -27,17 +27,25 @@ export default function ContinueReading({ book, progress, onRead }: ContinueRead
       >
         <div className="relative w-20 h-28 md:w-24 md:h-36 rounded-xl overflow-hidden shadow-lg flex-shrink-0">
           <Image 
-            src={book.cover} 
-            alt={book.title} 
+            src={
+              book?.cover && typeof book.cover === 'string' && book.cover.startsWith('http')
+                ? book.cover
+                : '/images/placeholder-book.jpg'
+            } 
+            alt={book?.judul || 'Book Cover'} 
             fill
+            unoptimized
             sizes="(max-width: 768px) 80px, 96px"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
             referrerPolicy="no-referrer"
+            priority
+            placeholder="blur"
+            blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg=="
           />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-serif text-lg md:text-xl font-bold text-stone-900 mb-0.5 md:mb-1 truncate">{book.title}</h3>
-          <p className="text-stone-500 text-xs md:text-sm mb-3 md:mb-4 truncate">by {book.author}</p>
+          <h3 className="font-serif text-lg md:text-xl font-bold text-stone-900 mb-0.5 md:mb-1 truncate">{book?.judul || 'Untitled Book'}</h3>
+          <p className="text-stone-500 text-xs md:text-sm mb-3 md:mb-4 truncate">in {book?.genre || 'Uncategorized'}</p>
           <div className="flex items-center gap-3 md:gap-4">
             <div className="flex-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${progress}%` }} />
