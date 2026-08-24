@@ -1,180 +1,227 @@
 import { Book } from '@/types/book';
 
-const BASE_URL = 'https://bukuacak-9bdcb4ef2605.herokuapp.com/api/v1/book';
-
 export interface FetchBooksParams {
   sort?: string;
   page?: number;
+  limit?: number;
   year?: string;
   genre?: string;
   keyword?: string;
 }
 
-export interface ApiResponse {
-  books: any[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalItems: number;
-    itemsPerPage: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
+export interface FetchBooksResponse {
+  books: Book[];
+  totalPages: number;
+  totalItems: number;
+  totalCatalogCount: number;
+  availableGenres: string[];
 }
 
-export async function fetchBooks(params: FetchBooksParams = {}): Promise<{ books: Book[], totalPages: number }> {
-  const url = new URL(BASE_URL);
-  
-  if (params.sort) url.searchParams.append('sort', params.sort);
-  if (params.page) url.searchParams.append('page', params.page.toString());
-  if (params.year) url.searchParams.append('year', params.year);
-  if (params.genre) url.searchParams.append('genre', params.genre);
-  if (params.keyword) url.searchParams.append('keyword', params.keyword);
+const LOCAL_STORAGE_CATALOG_KEY = 'bookly_admin_dynamic_books';
+
+// Helper to get cached admin books from localStorage
+export function getLocalAdminBooks(): Book[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CATALOG_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('Failed to parse local admin books:', e);
+    return [];
+  }
+}
+
+// Helper to save admin books to localStorage
+export function saveLocalAdminBooks(books: Book[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CATALOG_KEY, JSON.stringify(books));
+    window.dispatchEvent(new CustomEvent('bookly_catalog_updated'));
+  } catch (e) {
+    console.error('Failed to save local admin books:', e);
+  }
+}
+
+export async function fetchBooks(params: FetchBooksParams = {}): Promise<FetchBooksResponse> {
+  const query = new URLSearchParams();
+  if (params.sort) query.append('sort', params.sort);
+  if (params.page) query.append('page', params.page.toString());
+  if (params.limit) query.append('limit', params.limit.toString());
+  if (params.year) query.append('year', params.year);
+  if (params.genre) query.append('genre', params.genre);
+  if (params.keyword) query.append('keyword', params.keyword);
+
+  const endpoint = `/api/buku?${query.toString()}`;
 
   try {
-    const response = await fetch(url.toString());
-    if (!response.ok) throw new Error('Failed to fetch books');
-    
-    const data: ApiResponse = await response.json();
-    
-    const brokenTitles = [
-      "Harry Potter dan Si Anak Terkutuk: Naskah Drama Orisinal",
-      "Focus on What Matters",
-      "Satine",
-      "Petualangan Sukab",
-      "Mengelola Festival Film",
-      "Belajar Kaya dari Teman SMA",
-      "Pixar 1001 Stickers",
-      "Princess 1001 Stickers",
-      "The Third Door",
-      "MARVEL SPIDEY AND HIS AMAZING FRIENDS: BERMAIN BAJAK LAUT - CERITA SERU DAN AKTIVITAS",
-      "DISNEY FROZEN: PERMAINAN ES - CERITA SERU DAN AKTIVITAS",
-      "Inside Out 2: Kepikiran (All in the Mind)",
-      "The Character Gap",
-      "Peta Sejarah Tiongkok",
-      "BTS Lyrics Inside (Indonesian Edition)",
-      "Mickey 7",
-      "Dongeng Klasik Dunia 1 oleh Grimm Bersaudara",
-      "Dongeng Klasik Dunia 2 oleh Hans Christian Andersen",
-      "Unforgettable Hotel",
-      "Di Balik Jendela",
-      "Meal Plan 30 Hari Ala Dila Shina",
-      "Second Hope",
-      "Batik as My Identity (Batik Sebagai Jati Diriku)",
-      "Sisi Tergelap Surga",
-      "Tangled: Sahabat Sejati",
-      "Daisy",
-      "The Same Sky",
-      "Frozen 1001 Stickers",
-      "Disney Princess Dunia Ajaib: Buku Aktivitas Cari & Temukan",
-      "Disney Princess: Buku Tahunan 2021",
-      "Beauty and the Beast: Selamat Datang"
-    ];
-    
-    // Filter out books without a cover image or with known broken images
-    const filteredBooks = data.books.filter((b: any) => {
-      const hasCover = b.cover_image && b.cover_image.trim() !== "";
-      const isNotBroken = !brokenTitles.includes(b.title) && 
-                         b.cover_image !== "https://gpu.id/data-gpu/images/img-book/94307/Anak_-_Beauty_and_the_Beast_Selamat_Datang.jpg";
-      return hasCover && isNotBroken;
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json',
+      },
     });
-    
-    const mappedBooks: Book[] = filteredBooks.map((b: any) => {
-      // Handle details being a string, array or object, and check nested data
-      let details = b.details || b.detail || b.book_details || b.data?.details || b.data?.detail || {};
-      if (typeof details === 'string') {
-        try {
-          details = JSON.parse(details);
-        } catch (e) {
-          details = {};
-        }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const books = data.books || [];
+    const totalPages = data.totalPages || 1;
+    const totalItems = data.totalItems ?? books.length;
+    const totalCatalogCount = data.totalCatalogCount ?? books.length;
+    const availableGenres = data.availableGenres || [];
+
+    // If server has 0 books but local storage has uploaded books, attempt sync
+    if (totalCatalogCount === 0 && typeof window !== 'undefined') {
+      const localBooks = getLocalAdminBooks();
+      if (localBooks.length > 0) {
+        // Sync to server silently
+        syncCatalogToServer(localBooks).catch(() => {});
       }
-      
-      if (Array.isArray(details) && details.length > 0) {
-        details = details[0];
-      } else if (typeof details !== 'object' || details === null) {
-        details = {};
+    } else if (totalCatalogCount > 0 && typeof window !== 'undefined') {
+      // Keep local store in sync
+      if (!params.keyword && !params.genre && (!params.page || params.page === 1)) {
+        // We can save the master list if we fetch all
       }
-      
-      // Helper to get value from multiple keys and nested objects
-      const getVal = (keys: string[], obj1: any, obj2: any) => {
-        for (const key of keys) {
-          if (obj1[key] !== undefined && obj1[key] !== null && obj1[key] !== "") return obj1[key];
-          if (obj2[key] !== undefined && obj2[key] !== null && obj2[key] !== "") return obj2[key];
-        }
-        return "";
-      };
-
-      // Try to find published date
-      const rawDate = getVal(['published_date', 'release_date', 'year', 'published_at', 'date', 'publishedDate'], details, b);
-      const yearMatch = String(rawDate).match(/\d{4}/);
-      let year = yearMatch ? yearMatch[0] : "";
-      
-      // Try to find ISBN
-      const rawIsbn = getVal(['isbn', 'isbn13', 'isbn10', 'isbn_13', 'isbn_10', 'ISBN'], details, b);
-      let isbn = "";
-      const isbnStr = String(rawIsbn).trim();
-      // Filter out "0", "000...", "null", etc.
-      if (isbnStr && !/^(0+|null|undefined|nan|n\/a|-)$/i.test(isbnStr)) {
-        isbn = isbnStr.replace(/-/g, '');
-      }
-      
-      // Try to find pages
-      const rawPages = getVal(['number_of_pages', 'pages', 'page_count', 'total_pages', 'pageCount'], details, b);
-      let pagesStr = "";
-      const pStr = String(rawPages).trim();
-      if (pStr && !/^(0+|null|undefined|nan|n\/a|-)$/i.test(pStr)) {
-        pagesStr = pStr;
-      }
-
-      // Try to find publisher
-      const publisher = String(getVal(['publisher', 'penerbit', 'published_by', 'Publisher'], details, b)).trim();
-      
-      // Try to find language
-      const language = String(getVal(['language', 'bahasa', 'Language'], details, b)).trim();
-
-      // Try to find dimensions
-      const length = String(getVal(['length', 'panjang', 'book_length', 'Length'], details, b)).trim();
-      const width = String(getVal(['width', 'lebar', 'book_width', 'Width'], details, b)).trim();
-
-      const isJunk = (val: string) => {
-        const s = val.toLowerCase();
-        return s === "" || s === "null" || s === "undefined" || s === "-" || s === "n/a" || s === "nan";
-      };
-
-      let pdfUrl = undefined;
-      if (b.title === "Jejak Balak") {
-        pdfUrl = "https://vajvsjhfqmxckupiyoih.supabase.co/storage/v1/object/public/Books/Jejak%20Balak%20(Ayu%20Welirang)%20(z-library.sk,%201lib.sk,%20z-lib.sk).pdf";
-      }
-
-      return {
-        id: b._id,
-        judul: b.title || 'Untitled Book',
-        genre: b.category?.name || b.category || 'Uncategorized',
-        cover: b.cover_image || 'https://picsum.photos/400/600',
-        deskripsi: b.summary || b.description || 'No description available.',
-        title: b.title,
-        author: b.author?.name || b.author || 'Unknown Author',
-        content: (b.summary || b.description || 'No content available.').replace(/WASPADA!AWASI/g, 'WASPADA! AWASI'),
-        category: b.category?.name || b.category || 'Uncategorized',
-        year: year,
-        isbn: isbn,
-        price: details.price || b.price || '',
-        publisher: isJunk(publisher) ? "" : publisher,
-        pages: pagesStr,
-        language: isJunk(language) ? "" : language,
-        length: isJunk(length) ? "" : length,
-        width: isJunk(width) ? "" : width,
-        pdfUrl: pdfUrl,
-      };
-    });
+    }
 
     return {
-      books: mappedBooks,
-      totalPages: data.pagination.totalPages
+      books,
+      totalPages,
+      totalItems,
+      totalCatalogCount,
+      availableGenres,
     };
   } catch (error) {
-    console.error('Error fetching books:', error);
-    return { books: [], totalPages: 0 };
+    console.error('Error fetching books from API:', error);
+    // Offline fallback from localStorage
+    const localBooks = getLocalAdminBooks();
+    return {
+      books: localBooks,
+      totalPages: 1,
+      totalItems: localBooks.length,
+      totalCatalogCount: localBooks.length,
+      availableGenres: Array.from(new Set(localBooks.map(b => b.genre || b.category).filter(Boolean))),
+    };
+  }
+}
+
+export async function createBook(bookData: Partial<Book>): Promise<{ success: boolean; book?: Book; error?: string }> {
+  try {
+    const response = await fetch('/api/buku', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bookData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to create ebook');
+    }
+
+    // Update local cache
+    if (data.book && typeof window !== 'undefined') {
+      const current = getLocalAdminBooks();
+      saveLocalAdminBooks([data.book, ...current.filter(b => b.id !== data.book.id)]);
+    }
+
+    return { success: true, book: data.book };
+  } catch (error: any) {
+    console.error('Error in createBook:', error);
+    return { success: false, error: error?.message || 'Network error creating ebook' };
+  }
+}
+
+export async function updateBook(bookData: Partial<Book> & { id: string }): Promise<{ success: boolean; book?: Book; error?: string }> {
+  try {
+    const response = await fetch('/api/buku', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bookData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update ebook');
+    }
+
+    if (data.book && typeof window !== 'undefined') {
+      const current = getLocalAdminBooks();
+      saveLocalAdminBooks(current.map(b => (b.id === data.book.id ? data.book : b)));
+    }
+
+    return { success: true, book: data.book };
+  } catch (error: any) {
+    console.error('Error in updateBook:', error);
+    return { success: false, error: error?.message || 'Network error updating ebook' };
+  }
+}
+
+export async function deleteBook(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`/api/buku?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to delete ebook');
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = getLocalAdminBooks();
+      saveLocalAdminBooks(current.filter(b => b.id !== id));
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in deleteBook:', error);
+    return { success: false, error: error?.message || 'Network error deleting ebook' };
+  }
+}
+
+export async function clearAllCatalog(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch('/api/buku', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear' }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to clear catalog');
+    }
+
+    if (typeof window !== 'undefined') {
+      saveLocalAdminBooks([]);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Failed to clear catalog' };
+  }
+}
+
+export async function syncCatalogToServer(books: Book[]): Promise<{ success: boolean }> {
+  try {
+    const response = await fetch('/api/buku', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sync', books }),
+    });
+    const data = await response.json();
+    return { success: !!data.success };
+  } catch (e) {
+    return { success: false };
   }
 }

@@ -11,10 +11,28 @@ import { useRouter } from 'next/navigation';
 
 const ContinueReading = dynamic(() => import('@/components/ContinueReading'), { ssr: false });
 const BookReader = dynamic(() => import('@/components/BookReader'), { ssr: false });
-import { BookOpen, Heart, Download, SearchX, Filter, ChevronLeft, ChevronRight, Loader2, CircleUserRound, Search } from 'lucide-react';
+import { 
+  BookOpen, 
+  Heart, 
+  Download, 
+  SearchX, 
+  Filter, 
+  ChevronLeft, 
+  ChevronRight, 
+  Loader2, 
+  Search,
+  Database,
+  PlusCircle,
+  Sparkles,
+  RotateCcw
+} from 'lucide-react';
 import { fetchBooks } from '@/lib/api';
 import { NavBar } from '@/components/ui/tubelight-navbar';
 import ProfileModal from '@/components/ProfileModal';
+import Toast from '@/components/ui/Toast';
+import EmptyCatalogState from '@/components/EmptyCatalogState';
+import AdminBookManagementModal from '@/components/AdminBookManagementModal';
+import { getStoredUserState, loginUserAccount, logoutUserAccount } from '@/lib/auth-storage';
 
 export default function Home() {
   const router = useRouter();
@@ -23,6 +41,8 @@ export default function Home() {
   const [readingBook, setReadingBook] = useState<Book | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [apiBooks, setApiBooks] = useState<Book[]>([]);
+  const [availableGenres, setAvailableGenres] = useState<string[]>([]);
+  const [totalCatalogCount, setTotalCatalogCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -32,6 +52,18 @@ export default function Home() {
   const [bookToDownload, setBookToDownload] = useState<Book | null>(null);
   const [offlineSort, setOfflineSort] = useState<'date_desc' | 'date_asc' | 'title_asc' | 'title_desc' | 'author_asc' | 'author_desc'>('date_desc');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
+    message: '',
+    type: 'success',
+    isVisible: false,
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type, isVisible: true });
+  };
   
   // User State
   const [userState, setUserState] = useState<UserState>({
@@ -47,56 +79,71 @@ export default function Home() {
     { name: 'Search', id: 'search', icon: Search },
   ];
 
-  // Handle hydration and load state
+  // Handle hydration and load state + listen to external state sync
   useEffect(() => {
-    const saved = localStorage.getItem('bookly_user_state');
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        // Use Promise.resolve().then to make the state update asynchronous
-        // and avoid the "cascading renders" lint error while still
-        // correctly hydrating the client state.
-        Promise.resolve().then(() => setUserState(data));
-      } catch (e) {
-        console.error('Failed to parse user state', e);
-      }
-    }
+    const handleSync = () => {
+      const state = getStoredUserState();
+      setUserState(state);
+    };
+
+    handleSync();
+
+    window.addEventListener('bookly_user_state_changed', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    return () => {
+      window.removeEventListener('bookly_user_state_changed', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, []);
 
   // Save state to localStorage
   useEffect(() => {
-    // Only save if we have a valid state (to avoid overwriting with defaults on first render)
-    // Actually, since this effect runs after the first one (if they were separate), 
-    // or just whenever userState changes, we need to be careful.
-    // But since we only load once, any subsequent change is a user action.
-    // To be safe, we can check if we've loaded yet.
     if (typeof window !== 'undefined') {
       localStorage.setItem('bookly_user_state', JSON.stringify(userState));
     }
   }, [userState]);
 
-  // Fetch books from API
+  // Fetch dynamic books from API
   const loadBooks = useCallback(async () => {
-    if (activeTab !== 'all') return;
+    if (activeTab !== 'all' && activeTab !== 'search') return;
     
     setIsLoading(true);
-    const { books, totalPages: total } = await fetchBooks({
-      page: currentPage,
-      keyword: searchQuery,
-      genre: genre,
-      sort: sort,
-      year: year
-    });
-    setApiBooks(books);
-    setTotalPages(total);
-    setIsLoading(false);
+    try {
+      const { books, totalPages: total, totalCatalogCount: count, availableGenres: genres } = await fetchBooks({
+        page: currentPage,
+        keyword: searchQuery,
+        genre: genre,
+        sort: sort,
+        year: year,
+      });
+
+      setApiBooks(books);
+      setTotalPages(total);
+      setTotalCatalogCount(count);
+      setAvailableGenres(genres || []);
+    } catch (e) {
+      console.error('Failed to load books:', e);
+    } finally {
+      setIsLoading(false);
+    }
   }, [activeTab, searchQuery, genre, sort, year, currentPage]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       loadBooks();
-    }, 500); // Debounce
+    }, 300); // Debounce
     return () => clearTimeout(timer);
+  }, [loadBooks]);
+
+  // Listen to catalog updates from Admin CMS
+  useEffect(() => {
+    const handleCatalogUpdate = () => {
+      loadBooks();
+    };
+
+    window.addEventListener('bookly_catalog_updated', handleCatalogUpdate);
+    return () => window.removeEventListener('bookly_catalog_updated', handleCatalogUpdate);
   }, [loadBooks]);
 
   const handleSearchChange = (q: string) => {
@@ -119,20 +166,12 @@ export default function Home() {
     setCurrentPage(1);
   };
 
-  const handleLogin = (username: string, email: string) => {
-    setUserState(prev => ({
-      ...prev,
-      username,
-      email
-    }));
-  };
-
-  const handleLogout = () => {
-    setUserState(prev => {
-      const { username, email, ...rest } = prev;
-      return rest as UserState;
-    });
-    setIsProfileOpen(false);
+  const clearFilters = () => {
+    setSearchQuery('');
+    setGenre('');
+    setSort('');
+    setYear('');
+    setCurrentPage(1);
   };
 
   const handleTabChange = (tab: string) => {
@@ -148,20 +187,18 @@ export default function Home() {
     if (activeTab === 'all' || activeTab === 'search') return apiBooks;
     
     if (activeTab === 'bookmarks') {
-      // For bookmarks, we show what we have in apiBooks or downloads
       const bookmarkedInApi = apiBooks.filter(b => userState.bookmarks.includes(b.id));
       const bookmarkedInDownloads = userState.downloads.filter(b => userState.bookmarks.includes(b.id));
-      // Combine and remove duplicates
       const combined = [...bookmarkedInApi, ...bookmarkedInDownloads];
       return Array.from(new Map(combined.map(item => [item.id, item])).values());
     }
     if (activeTab === 'downloads') {
       let sorted = [...(userState.downloads || [])];
       switch (offlineSort) {
-        case 'title_asc': sorted.sort((a, b) => (a?.judul || '').localeCompare(b?.judul || '')); break;
-        case 'title_desc': sorted.sort((a, b) => (b?.judul || '').localeCompare(a?.judul || '')); break;
-        case 'author_asc': sorted.sort((a, b) => (a?.genre || '').localeCompare(b?.genre || '')); break;
-        case 'author_desc': sorted.sort((a, b) => (b?.genre || '').localeCompare(a?.genre || '')); break;
+        case 'title_asc': sorted.sort((a, b) => (a?.judul || a?.title || '').localeCompare(b?.judul || b?.title || '')); break;
+        case 'title_desc': sorted.sort((a, b) => (b?.judul || b?.title || '').localeCompare(a?.judul || a?.title || '')); break;
+        case 'author_asc': sorted.sort((a, b) => (a?.author || '').localeCompare(b?.author || '')); break;
+        case 'author_desc': sorted.sort((a, b) => (b?.author || '').localeCompare(a?.author || '')); break;
         case 'date_asc': break;
         case 'date_desc': sorted.reverse(); break;
       }
@@ -171,12 +208,14 @@ export default function Home() {
   }, [activeTab, apiBooks, userState.bookmarks, userState.downloads, offlineSort]);
 
   const toggleBookmark = (id: string) => {
+    const willBookmark = !userState.bookmarks.includes(id);
     setUserState(prev => ({
       ...prev,
-      bookmarks: prev.bookmarks.includes(id)
-        ? prev.bookmarks.filter(bid => bid !== id)
-        : [...prev.bookmarks, id]
+      bookmarks: willBookmark
+        ? [...prev.bookmarks, id]
+        : prev.bookmarks.filter(bid => bid !== id)
     }));
+    showToast(willBookmark ? 'Added to your Wishlist.' : 'Removed from your Wishlist.', 'info');
   };
 
   const toggleDownload = (book: Book) => {
@@ -186,6 +225,7 @@ export default function Home() {
         ...prev,
         downloads: prev.downloads.filter(b => b.id !== book.id)
       }));
+      showToast(`"${book.judul || book.title}" removed from Offline Library.`, 'info');
     } else {
       setBookToDownload(book);
     }
@@ -199,7 +239,7 @@ export default function Home() {
         rating,
         text,
         date: new Date().toISOString(),
-        username: prev.username || 'Anonymous',
+        username: prev.username || 'Anonymous User',
       };
       return {
         ...prev,
@@ -209,6 +249,7 @@ export default function Home() {
         }
       };
     });
+    showToast('Review submitted successfully!', 'success');
   };
 
   const confirmDownload = () => {
@@ -217,6 +258,7 @@ export default function Home() {
       ...prev,
       downloads: [...prev.downloads, bookToDownload]
     }));
+    showToast(`"${bookToDownload.judul || bookToDownload.title}" saved for offline reading!`, 'success');
     setBookToDownload(null);
   };
 
@@ -234,7 +276,6 @@ export default function Home() {
 
   const lastReadBook = useMemo(() => {
     if (!userState.lastReadBookId) return null;
-    // Find in apiBooks or downloads
     return apiBooks.find(b => b.id === userState.lastReadBookId) || 
            userState.downloads.find(b => b.id === userState.lastReadBookId);
   }, [userState.lastReadBookId, apiBooks, userState.downloads]);
@@ -244,33 +285,40 @@ export default function Home() {
     return userState.lastRead[userState.lastReadBookId] || 0;
   }, [userState.lastReadBookId, userState.lastRead]);
 
-  const genres = ['Drama', 'Fiction', 'Self-Improvement', 'MetroPop', 'Literary', 'Mysteries & Thrillers', 'Science & Nature', 'Poetry', 'Culture', 'Picture Books'];
+  const isSearchOrFiltered = Boolean(searchQuery.trim() || genre || year || sort);
 
   return (
-    <main className="min-h-screen pb-24">
+    <main className="min-h-screen pb-24 bg-[#FAFAF9] text-stone-900">
+      {/* Top Navigation */}
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={handleTabChange} 
         onProfileClick={() => setIsProfileOpen(true)}
+        onAdminClick={() => setIsAdminModalOpen(true)}
+        catalogCount={totalCatalogCount}
       />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search Input Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search View Bar */}
         {activeTab === 'search' && (
-          <div className="mb-8 relative max-w-2xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 relative max-w-2xl mx-auto"
+          >
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={20} />
             <input
               type="text"
               autoFocus
-              placeholder="Search title or author..."
+              placeholder="Search by title, author, genre, or keyword..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-white border border-stone-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none text-lg text-stone-800 placeholder:text-stone-400"
+              className="w-full pl-12 pr-4 py-3.5 bg-white border border-stone-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none text-base text-stone-800 placeholder:text-stone-400"
             />
-          </div>
+          </motion.div>
         )}
 
-        {/* Continue Reading Section */}
+        {/* Continue Reading Section (Only when active progress exists) */}
         {activeTab === 'all' && lastReadBook && !searchQuery && !genre && currentPage === 1 && (
           <ContinueReading 
             book={lastReadBook} 
@@ -279,149 +327,223 @@ export default function Home() {
           />
         )}
 
-        {/* Filters Bar */}
+        {/* Filters Bar for Active Catalog */}
         {activeTab === 'all' && (
-          <div className="mb-8 flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2 text-stone-500 bg-stone-100 px-4 py-2 rounded-full text-sm font-medium">
-              <Filter size={16} />
-              <span>Filters</span>
-            </div>
-            
-            <select 
-              value={genre} 
-              onChange={(e) => handleGenreChange(e.target.value)}
-              className="bg-white border border-stone-200 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              <option value="">All Genres</option>
-              {genres.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-
-            <select 
-              value={sort} 
-              onChange={(e) => handleSortChange(e.target.value)}
-              className="bg-white border border-stone-200 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              <option value="">Sort By</option>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="title_asc">Title A-Z</option>
-              <option value="title_desc">Title Z-A</option>
-            </select>
-
-            <input 
-              type="number"
-              placeholder="Year"
-              value={year}
-              onChange={(e) => handleYearChange(e.target.value)}
-              className="w-24 bg-white border border-stone-200 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-
-            {(genre || sort || year) && (
-              <button 
-                onClick={() => { setGenre(''); setSort(''); setYear(''); setCurrentPage(1); }}
-                className="text-xs font-bold text-emerald-600 uppercase tracking-wider hover:underline"
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-4 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/80 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-1.5 text-stone-500 bg-stone-100/90 px-3 py-1.5 rounded-xl text-xs font-bold">
+                <Filter size={14} />
+                <span>Filter</span>
+              </div>
+              
+              {/* Dynamic Genre Dropdown */}
+              <select 
+                value={genre} 
+                onChange={(e) => handleGenreChange(e.target.value)}
+                className="bg-stone-50 hover:bg-stone-100/80 border border-stone-200/90 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer transition-colors"
               >
-                Clear All
-              </button>
-            )}
+                <option value="">All Categories</option>
+                {availableGenres.map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+
+              {/* Sort Dropdown */}
+              <select 
+                value={sort} 
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="bg-stone-50 hover:bg-stone-100/80 border border-stone-200/90 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer transition-colors"
+              >
+                <option value="">Sort By</option>
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="title_asc">Title (A - Z)</option>
+                <option value="title_desc">Title (Z - A)</option>
+                <option value="author_asc">Author (A - Z)</option>
+              </select>
+
+              {/* Year Filter */}
+              <input 
+                type="number"
+                placeholder="Year"
+                value={year}
+                onChange={(e) => handleYearChange(e.target.value)}
+                className="w-20 bg-stone-50 border border-stone-200/90 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+
+              {isSearchOrFiltered && (
+                <button 
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <RotateCcw size={12} />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+
+            {/* Quick Upload CTA button */}
+            <button
+              type="button"
+              onClick={() => setIsAdminModalOpen(true)}
+              className="hidden md:flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
+            >
+              <PlusCircle size={14} />
+              <span>Add eBook</span>
+            </button>
           </div>
         )}
 
-        {/* Section Title */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-serif font-bold text-stone-900">
-              {activeTab === 'all' ? 'Featured Books' : activeTab === 'bookmarks' ? 'Your Wishlist' : 'Offline Library'}
+        {/* Section Title Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 tracking-tight">
+              {activeTab === 'all' 
+                ? (genre ? `${genre} eBooks` : 'Explore Catalog')
+                : activeTab === 'bookmarks' 
+                  ? 'Your Wishlist' 
+                  : activeTab === 'downloads'
+                    ? 'Offline Library'
+                    : 'Search Results'}
             </h2>
+
             {activeTab === 'downloads' && (
               <select 
                 value={offlineSort} 
                 onChange={(e) => setOfflineSort(e.target.value as any)}
-                className="bg-white border border-stone-200 rounded-full px-4 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 text-stone-600"
+                className="bg-white border border-stone-200 rounded-xl px-3 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 text-stone-600 cursor-pointer"
               >
-                <option value="date_desc">Newest Download</option>
-                <option value="date_asc">Oldest Download</option>
-                <option value="title_asc">Title A-Z</option>
-                <option value="title_desc">Title Z-A</option>
-                <option value="author_asc">Author A-Z</option>
-                <option value="author_desc">Author Z-A</option>
+                <option value="date_desc">Newest Downloaded</option>
+                <option value="date_asc">Oldest Downloaded</option>
+                <option value="title_asc">Title (A - Z)</option>
+                <option value="title_desc">Title (Z - A)</option>
               </select>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            {isLoading && <Loader2 className="animate-spin text-emerald-600" size={20} />}
-            <span className="text-sm text-stone-400 font-medium">{displayBooks.length} books shown</span>
+
+          <div className="flex items-center gap-3">
+            {isLoading && <Loader2 className="animate-spin text-emerald-600" size={18} />}
+            <span className="text-xs text-stone-500 font-semibold bg-stone-100 px-2.5 py-1 rounded-lg">
+              {displayBooks.length} {displayBooks.length === 1 ? 'eBook' : 'eBooks'}
+            </span>
           </div>
         </div>
 
-        {/* Book Grid */}
-        <div id="book-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 min-h-[400px]">
-          <AnimatePresence mode="popLayout">
-            {!isLoading && (displayBooks || []).map((book, index) => (
-              book && (
-                <BookCard
-                  key={book.id || index}
-                  book={book}
-                  isBookmarked={userState.bookmarks.includes(book.id)}
-                  isDownloaded={userState.downloads.some(b => b.id === book.id)}
-                  onToggleBookmark={toggleBookmark}
-                  onToggleDownload={toggleDownload}
-                  onRead={setReadingBook}
-                  onShowDetail={setSelectedBook}
-                  priority={index < 4}
-                  reviews={userState.reviews?.[book.id] || []}
-                />
-              )
+        {/* Book Grid or Empty State */}
+        {isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 sm:gap-6 min-h-[360px]">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="bg-stone-200/60 rounded-2xl aspect-[2/3] animate-pulse" />
             ))}
-          </AnimatePresence>
-          
-          {isLoading && Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="bg-stone-100 rounded-2xl aspect-[2/3] animate-pulse" />
-          ))}
-        </div>
+          </div>
+        ) : displayBooks.length > 0 ? (
+          <div id="book-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 sm:gap-6 min-h-[360px]">
+            <AnimatePresence mode="popLayout">
+              {displayBooks.map((book, index) => (
+                book && (
+                  <BookCard
+                    key={book.id || index}
+                    book={book}
+                    isBookmarked={userState.bookmarks.includes(book.id)}
+                    isDownloaded={userState.downloads.some(b => b.id === book.id)}
+                    onToggleBookmark={toggleBookmark}
+                    onToggleDownload={toggleDownload}
+                    onRead={setReadingBook}
+                    onShowDetail={setSelectedBook}
+                    priority={index < 4}
+                    reviews={userState.reviews?.[book.id] || []}
+                  />
+                )
+              ))}
+            </AnimatePresence>
+          </div>
+        ) : (
+          /* Robust, Beautiful Empty State Handling */
+          <div className="min-h-[400px] flex items-center justify-center">
+            {activeTab === 'all' || activeTab === 'search' ? (
+              <EmptyCatalogState
+                isSearchOrFiltered={isSearchOrFiltered}
+                searchQuery={searchQuery}
+                genre={genre}
+                onClearFilters={clearFilters}
+                onOpenUpload={() => setIsAdminModalOpen(true)}
+              />
+            ) : activeTab === 'bookmarks' ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="py-16 px-6 max-w-md mx-auto flex flex-col items-center justify-center text-center bg-white rounded-3xl border border-stone-200 shadow-sm"
+              >
+                <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-4">
+                  <Heart size={32} />
+                </div>
+                <h3 className="text-xl font-serif font-bold text-stone-900 mb-2">No Bookmarks Yet</h3>
+                <p className="text-stone-500 text-xs leading-relaxed mb-6">
+                  Save books to your personal wishlist by clicking the bookmark icon on any book cover.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('all')}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+                >
+                  Explore Catalog
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="py-16 px-6 max-w-md mx-auto flex flex-col items-center justify-center text-center bg-white rounded-3xl border border-stone-200 shadow-sm"
+              >
+                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
+                  <Download size={32} />
+                </div>
+                <h3 className="text-xl font-serif font-bold text-stone-900 mb-2">Offline Library Empty</h3>
+                <p className="text-stone-500 text-xs leading-relaxed mb-6">
+                  Download eBooks to read offline at any time without an active internet connection.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('all')}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+                >
+                  Browse Catalog
+                </button>
+              </motion.div>
+            )}
+          </div>
+        )}
 
-        {/* Pagination */}
+        {/* Dynamic Pagination */}
         {activeTab === 'all' && totalPages > 1 && (
-          <div className="mt-12 flex items-center justify-center gap-4">
+          <div className="mt-12 flex items-center justify-center gap-3">
             <button 
+              type="button"
               disabled={currentPage === 1 || isLoading}
               onClick={() => setCurrentPage(p => p - 1)}
-              className="p-2 rounded-full border border-stone-200 disabled:opacity-30 hover:bg-stone-50 transition-colors"
+              className="p-2 rounded-xl border border-stone-200 bg-white disabled:opacity-30 hover:bg-stone-50 transition-colors shadow-xs"
+              aria-label="Previous page"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} />
             </button>
-            <span className="text-sm font-bold text-stone-600">
+            <span className="text-xs font-bold text-stone-700 px-3 py-1.5 rounded-lg bg-stone-100">
               Page {currentPage} of {totalPages}
             </span>
             <button 
+              type="button"
               disabled={currentPage === totalPages || isLoading}
               onClick={() => setCurrentPage(p => p + 1)}
-              className="p-2 rounded-full border border-stone-200 disabled:opacity-30 hover:bg-stone-50 transition-colors"
+              className="p-2 rounded-xl border border-stone-200 bg-white disabled:opacity-30 hover:bg-stone-50 transition-colors shadow-xs"
+              aria-label="Next page"
             >
-              <ChevronRight size={20} />
+              <ChevronRight size={18} />
             </button>
           </div>
         )}
-
-        {/* Empty State */}
-        {!isLoading && displayBooks.length === 0 && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="py-20 flex flex-col items-center justify-center text-center"
-          >
-            <div className="w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center text-stone-400 mb-6">
-              <SearchX size={40} />
-            </div>
-            <h3 className="text-xl font-serif font-bold text-stone-900 mb-2">No books found</h3>
-            <p className="text-stone-500 max-w-xs">
-              Try adjusting your search or check your filters to find what you&apos;re looking for.
-            </p>
-          </motion.div>
-        )}
       </div>
 
-      {/* Detail Overlay */}
+      {/* Book Detail Modal */}
       <AnimatePresence>
         {selectedBook && (
           <BookDetail
@@ -456,55 +578,75 @@ export default function Home() {
           />
         )}
       </AnimatePresence>
-      {/* Confirmation Dialog */}
+
+      {/* Download Offline Confirmation Dialog */}
       <AnimatePresence>
         {bookToDownload && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl"
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-stone-200"
             >
-              <h3 className="text-xl font-serif font-bold text-stone-900 mb-3">Download Book?</h3>
-              <p className="text-stone-600 mb-8 text-sm leading-relaxed">
-                Are you sure you want to download <span className="font-semibold text-stone-900">&quot;{bookToDownload.title}&quot;</span> for offline reading? This will save the book to your device.
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+                <Download size={24} />
+              </div>
+              <h3 className="text-lg font-serif font-bold text-stone-900 mb-2">Download eBook?</h3>
+              <p className="text-stone-600 mb-6 text-xs leading-relaxed">
+                Save <span className="font-bold text-stone-900">&quot;{bookToDownload.judul || bookToDownload.title}&quot;</span> to your device for offline reading without an internet connection.
               </p>
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-2.5">
                 <button 
+                  type="button"
                   onClick={() => setBookToDownload(null)} 
-                  className="px-5 py-2.5 rounded-xl text-stone-500 hover:bg-stone-100 font-medium transition-colors text-sm"
+                  className="px-4 py-2 rounded-xl text-stone-600 hover:bg-stone-100 font-bold transition-colors text-xs"
                 >
                   Cancel
                 </button>
                 <button 
+                  type="button"
                   onClick={confirmDownload} 
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 font-medium transition-colors shadow-lg shadow-emerald-100 text-sm"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 font-bold transition-colors shadow-md shadow-emerald-200 text-xs cursor-pointer"
                 >
-                  Download
+                  Download Now
                 </button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Tubelight Bottom Navigation Bar */}
       <NavBar 
         items={navItems} 
         activeTab={activeTab} 
         onTabChange={handleTabChange} 
       />
+
+      {/* Profile & Account Modal */}
       <ProfileModal 
         isOpen={isProfileOpen} 
         onClose={() => setIsProfileOpen(false)} 
         username={userState.username}
         email={userState.email}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
+        onLogin={(u, e) => {
+          loginUserAccount(u, e);
+          showToast(`Welcome back, ${u}!`, 'success');
+        }}
+        onLogout={() => {
+          logoutUserAccount();
+          showToast('Signed out successfully.', 'info');
+          setIsProfileOpen(false);
+        }}
+        onDeleteDataSuccess={(msg) => {
+          showToast(msg, 'success');
+        }}
         onWishlistClick={() => {
           setIsProfileOpen(false);
           setActiveTab('bookmarks');
@@ -539,6 +681,23 @@ export default function Home() {
           setIsProfileOpen(false);
           router.push('/profile');
         }}
+      />
+
+      {/* Admin eBook Management Studio Modal */}
+      <AdminBookManagementModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        catalogBooks={apiBooks}
+        onCatalogChanged={loadBooks}
+        onShowToast={showToast}
+      />
+
+      {/* Action Toast Notifications */}
+      <Toast 
+        message={toast.message} 
+        type={toast.type} 
+        isVisible={toast.isVisible} 
+        onClose={() => setToast(prev => ({ ...prev, isVisible: false }))} 
       />
     </main>
   );

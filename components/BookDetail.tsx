@@ -79,25 +79,44 @@ export default function BookDetail({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Left Side: Cover */}
-        <div className="md:w-2/5 bg-stone-100 relative min-h-[300px] md:min-h-0">
-          <Image
-            src={
-              book?.cover && typeof book.cover === 'string' && book.cover.startsWith('http')
-                ? book.cover
-                : '/images/placeholder-book.jpg'
-            }
-            alt={book?.judul || 'Book Cover'}
-            fill
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 40vw"
-            className="object-cover"
-            referrerPolicy="no-referrer"
-            placeholder="blur"
-            blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg=="
-          />
+        <div className="md:w-2/5 bg-stone-900 relative min-h-[300px] md:min-h-0">
+          {book?.cover && (book.cover.startsWith('http') || book.cover.startsWith('data:') || book.cover.startsWith('/')) ? (
+            <Image
+              src={book.cover}
+              alt={book?.judul || 'Book Cover'}
+              fill
+              unoptimized
+              sizes="(max-width: 768px) 100vw, 40vw"
+              className="object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-stone-900 via-stone-800 to-emerald-950 p-8 flex flex-col justify-between text-white select-none">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-800/50">
+                  {book?.genre || book?.category || 'eBook'}
+                </span>
+                <BookOpen size={20} className="text-stone-400" />
+              </div>
+
+              <div className="my-auto py-6">
+                <h3 className="font-serif font-bold text-2xl md:text-3xl leading-tight text-white mb-2">
+                  {book?.judul || book?.title}
+                </h3>
+                <p className="text-sm text-stone-300 font-medium">
+                  {book?.author}
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-stone-700/80 flex items-center justify-between text-xs text-stone-400">
+                <span>{book?.publisher || 'Digital Edition'}</span>
+                <span>{book?.year || 'Bookly'}</span>
+              </div>
+            </div>
+          )}
           <button
             onClick={onClose}
-            className="absolute top-4 left-4 p-2 bg-white/80 backdrop-blur-md rounded-full text-stone-900 hover:bg-white transition-colors md:hidden"
+            className="absolute top-4 left-4 p-2 bg-white/80 backdrop-blur-md rounded-full text-stone-900 hover:bg-white transition-colors md:hidden z-10"
           >
             <X size={20} />
           </button>
