@@ -5,6 +5,7 @@ export interface Book {
   category: string;
   cover: string;
   deskripsi: string;
+  synopsis?: string;
   content?: string;
   title?: string;
   author?: string;

@@ -5,12 +5,10 @@ import { Book, UserState } from '@/types/book';
 import Navbar from '@/components/Navbar';
 import BookCard from '@/components/BookCard';
 import BookDetail from '@/components/BookDetail';
-import dynamic from 'next/dynamic';
+import ContinueReading from '@/components/ContinueReading';
+import BookReader from '@/components/BookReader';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-
-const ContinueReading = dynamic(() => import('@/components/ContinueReading'), { ssr: false });
-const BookReader = dynamic(() => import('@/components/BookReader'), { ssr: false });
 import { 
   BookOpen, 
   Heart, 

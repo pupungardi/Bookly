@@ -9,36 +9,22 @@ import {
   Minus, 
   Plus, 
   Bookmark, 
-  ChevronLeft, 
-  ChevronRight, 
-  ChevronsLeft, 
-  ChevronsRight, 
   Maximize2, 
   Minimize2,
-  SlidersHorizontal,
-  Loader2,
   FileText,
-  AlertCircle,
   List,
   BookOpen,
   Check,
   AlignLeft,
   AlignJustify,
   Clock,
-  Sparkles
+  Sparkles,
+  ExternalLink,
+  Download,
+  FileCheck
 } from 'lucide-react';
 import { Book } from '@/types/book';
 import { motion, AnimatePresence } from 'motion/react';
-import { Document, Page, pdfjs } from 'react-pdf';
-
-// Import styles for react-pdf
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
-
-// Configure worker for pdfjs-dist with https protocol
-if (typeof window !== 'undefined' && pdfjs.GlobalWorkerOptions) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version || '3.11.174'}/build/pdf.worker.min.js`;
-}
 
 // Reading Themes Definitions (Apple Books / Google Play Books Inspired)
 export type ReaderThemeId = 'paper' | 'sepia' | 'twilight' | 'midnight' | 'mint';
@@ -65,7 +51,7 @@ const READER_THEMES: Record<ReaderThemeId, ReaderTheme> = {
     textClass: 'text-[#1C1917]',
     textMutedClass: 'text-[#78716C]',
     borderClass: 'border-[#E7E5E4]',
-    surfaceClass: 'bg-white/90',
+    surfaceClass: 'bg-white/95',
     accentClass: 'text-emerald-700 bg-emerald-50 border-emerald-200',
     accentHex: '#059669',
   },
@@ -119,7 +105,7 @@ const READER_THEMES: Record<ReaderThemeId, ReaderTheme> = {
   }
 };
 
-type FontFamily = 'serif' | 'sans' | 'mono' | 'dyslexic';
+type FontFamily = 'serif' | 'sans' | 'mono';
 type LineHeight = 'compact' | 'normal' | 'spacious';
 type PageWidth = 'narrow' | 'normal' | 'wide';
 
@@ -152,7 +138,7 @@ export default function BookReader({
   const [pageWidth, setPageWidth] = useState<PageWidth>('normal');
   const [textAlign, setTextAlign] = useState<'left' | 'justify'>('left');
   
-  // Controls Overlay State (Tap to Toggle Chrome like Apple Books)
+  // Controls Overlay State
   const [showControls, setShowControls] = useState<boolean>(true);
   const [showSettingsSheet, setShowSettingsSheet] = useState<boolean>(false);
   const [showChaptersDrawer, setShowChaptersDrawer] = useState<boolean>(false);
@@ -164,21 +150,11 @@ export default function BookReader({
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasSetInitialScroll = useRef(false);
 
-  // PDF State
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageNumber, setPageNumber] = useState<number>(1);
-  const [pageInput, setPageInput] = useState<string>('1');
-  const [pdfScale, setPdfScale] = useState<number>(1.0);
-  const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(true);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [showPdfScrubber, setShowPdfScrubber] = useState<boolean>(false);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const settingsSheetRef = useRef<HTMLDivElement>(null);
-
   const currentTheme = READER_THEMES[themeId] || READER_THEMES.paper;
-  const isPdf = Boolean(book.pdfUrl && book.pdfUrl.endsWith('.pdf'));
+  const isPdf = Boolean(
+    book.pdfUrl && 
+    (book.pdfUrl.toLowerCase().endsWith('.pdf') || book.pdfUrl.startsWith('blob:') || book.pdfUrl.startsWith('data:application/pdf'))
+  );
 
   // Calculate estimated reading time for text books (~200 words per minute)
   const readingStats = useMemo(() => {
@@ -197,7 +173,7 @@ export default function BookReader({
 
     lines.forEach((line, index) => {
       const trimmed = line.trim();
-      if (/^(BAB|CHAPTER|BAGIAN|ACT|BAGIAN PERTAMA|EPILOG|PROLOG|HUJAN BULAN JUNI)\b/i.test(trimmed) && trimmed.length < 80) {
+      if (/^(BAB|CHAPTER|BAGIAN|ACT|BAGIAN PERTAMA|EPILOG|PROLOG)\b/i.test(trimmed) && trimmed.length < 80) {
         detected.push({
           title: trimmed,
           lineIndex: index,
@@ -211,52 +187,6 @@ export default function BookReader({
     }
     return detected;
   }, [book.content]);
-
-  // Handle PDF document load
-  const onDocumentLoadSuccess = useCallback(({ numPages: total }: { numPages: number }) => {
-    setNumPages(total);
-    setIsLoadingPdf(false);
-    setPdfError(null);
-
-    if (initialProgress > 0 && total > 1) {
-      const calculatedPage = Math.max(1, Math.min(total, Math.round((initialProgress / 100) * total)));
-      setPageNumber(calculatedPage);
-      setPageInput(calculatedPage.toString());
-    } else {
-      setPageNumber(1);
-      setPageInput('1');
-    }
-  }, [initialProgress]);
-
-  const onDocumentLoadError = useCallback((err: Error) => {
-    console.error('PDF load error:', err);
-    setIsLoadingPdf(false);
-    setPdfError('Tidak dapat memuat berkas PDF. Silakan periksa koneksi atau coba lagi nanti.');
-  }, []);
-
-  // Jump to specific PDF page
-  const goToPage = useCallback((targetPage: number) => {
-    if (!numPages) return;
-    const clamped = Math.max(1, Math.min(numPages, targetPage));
-    setPageNumber(clamped);
-    setPageInput(clamped.toString());
-
-    const calculatedProgress = numPages > 0 ? Math.round((clamped / numPages) * 100) : 0;
-    setProgress(calculatedProgress);
-    onProgressChange(calculatedProgress);
-  }, [numPages, onProgressChange]);
-
-  const handlePageInputSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!numPages) return;
-    const parsed = parseInt(pageInput, 10);
-    if (!isNaN(parsed)) {
-      goToPage(parsed);
-    } else {
-      setPageInput(pageNumber.toString());
-    }
-    inputRef.current?.blur();
-  };
 
   // Fullscreen toggle handler
   const toggleFullscreen = () => {
@@ -274,37 +204,20 @@ export default function BookReader({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement === inputRef.current) return;
-
       if (e.key === 'Escape') {
         if (showSettingsSheet) setShowSettingsSheet(false);
         else if (showChaptersDrawer) setShowChaptersDrawer(false);
+        else onClose();
       } else if (e.key === 't' || e.key === 'T') {
         setShowSettingsSheet(prev => !prev);
       } else if (e.key === 'f' || e.key === 'F') {
         toggleFullscreen();
       }
-
-      if (isPdf && numPages) {
-        if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-          e.preventDefault();
-          if (pageNumber > 1) goToPage(pageNumber - 1);
-        } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
-          e.preventDefault();
-          if (pageNumber < numPages) goToPage(pageNumber + 1);
-        } else if (e.key === 'Home') {
-          e.preventDefault();
-          goToPage(1);
-        } else if (e.key === 'End') {
-          e.preventDefault();
-          goToPage(numPages);
-        }
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPdf, numPages, pageNumber, goToPage, showSettingsSheet, showChaptersDrawer]);
+  }, [showSettingsSheet, showChaptersDrawer, onClose]);
 
   // Initial scroll position for text books
   useEffect(() => {
@@ -333,7 +246,7 @@ export default function BookReader({
   const onScrollThrottled = (e: React.UIEvent<HTMLDivElement>) => {
     setScrollY(e.currentTarget.scrollTop);
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
-    scrollTimer.current = setTimeout(handleTextProgressUpdate, 400);
+    scrollTimer.current = setTimeout(handleTextProgressUpdate, 350);
   };
 
   const adjustFontSize = (delta: number) => {
@@ -360,7 +273,6 @@ export default function BookReader({
       case 'serif': return 'font-serif tracking-normal';
       case 'sans': return 'font-sans tracking-tight';
       case 'mono': return 'font-mono text-[0.92em] tracking-tight';
-      case 'dyslexic': return 'font-sans tracking-wide leading-loose';
       default: return 'font-serif';
     }
   };
@@ -385,9 +297,8 @@ export default function BookReader({
     }
   };
 
-  // Tap handler to toggle chrome (Apple Books style)
+  // Tap handler to toggle chrome
   const handleContentAreaClick = (e: React.MouseEvent) => {
-    // Only toggle if user clicked background/content, not interactive buttons/links
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('input') || target.closest('form') || target.closest('a') || target.closest('.no-toggle')) {
       return;
@@ -402,36 +313,36 @@ export default function BookReader({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.2 }}
       className={`fixed inset-0 z-[100] ${currentTheme.bgClass} flex flex-col select-none transition-colors duration-300 overflow-hidden`}
     >
-      {/* 1. Hairline Top Reading Progress Bar (Subtle & Unobtrusive) */}
-      <div className="fixed top-0 left-0 right-0 h-[2px] z-50 bg-black/5 dark:bg-white/5 pointer-events-none">
+      {/* 1. Hairline Top Reading Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 h-[3px] z-50 bg-black/5 dark:bg-white/5 pointer-events-none">
         <motion.div 
           className="h-full transition-all duration-300 ease-out"
           style={{ 
-            width: `${progress}%`, 
+            width: `${isPdf ? 100 : progress}%`, 
             backgroundColor: currentTheme.accentHex 
           }} 
         />
       </div>
 
-      {/* 2. Streamlined Top Toolbar (Clean, Minimalist, Relocated Font Controls) */}
+      {/* 2. Top Navigation Toolbar */}
       <AnimatePresence>
         {showControls && (
           <motion.header
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className={`fixed top-0 left-0 right-0 z-40 px-4 md:px-8 py-3.5 border-b ${currentTheme.borderClass} ${currentTheme.surfaceClass} backdrop-blur-xl shadow-xs flex items-center justify-between transition-colors duration-300`}
           >
             {/* Left: Back / Close & Book Metadata */}
             <div className="flex items-center gap-3 min-w-0">
               <button 
                 onClick={onClose}
-                className={`p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-colors active:scale-95 flex items-center gap-1.5`}
-                aria-label="Kembali ke Beranda"
+                className={`p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-colors active:scale-95 flex items-center gap-1.5 cursor-pointer`}
+                aria-label="Kembali"
                 title="Tutup Pembaca"
               >
                 <ArrowLeft size={19} />
@@ -448,11 +359,11 @@ export default function BookReader({
                   <span className={`truncate ${currentTheme.textMutedClass}`}>
                     {book?.author || book?.genre || 'Bookly'}
                   </span>
-                  {isPdf && numPages && (
+                  {isPdf && (
                     <>
                       <span className={currentTheme.textMutedClass}>•</span>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                        {numPages} Hal
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <FileCheck size={11} /> Dokumen PDF
                       </span>
                     </>
                   )}
@@ -460,12 +371,12 @@ export default function BookReader({
               </div>
             </div>
 
-            {/* Right: Quick Chapter List, Bookmark & Fullscreen */}
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Right: Quick Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {!isPdf && chapters.length > 1 && (
                 <button
                   onClick={() => setShowChaptersDrawer(true)}
-                  className={`p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all`}
+                  className={`p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all cursor-pointer`}
                   title="Daftar Bab & Isi"
                   aria-label="Table of Contents"
                 >
@@ -476,7 +387,7 @@ export default function BookReader({
               {/* Bookmark Toggle Button */}
               <button
                 onClick={() => onToggleBookmark(book.id)}
-                className={`p-2 rounded-xl transition-all ${
+                className={`p-2 rounded-xl transition-all cursor-pointer ${
                   isBookmarked 
                     ? 'bg-emerald-600 text-white shadow-sm' 
                     : `hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass}`
@@ -490,7 +401,7 @@ export default function BookReader({
               {/* Fullscreen Immersion Button */}
               <button
                 onClick={toggleFullscreen}
-                className={`hidden sm:flex p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all`}
+                className={`hidden sm:flex p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all cursor-pointer`}
                 title={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh (F)'}
                 aria-label="Toggle Fullscreen"
               >
@@ -501,53 +412,51 @@ export default function BookReader({
         )}
       </AnimatePresence>
 
-      {/* 3. Main Reading Canvas (Distraction-Free, Generous Margins, Elegant Cover Presentation) */}
+      {/* 3. Main Reading Canvas */}
       <div 
         ref={scrollRef}
         onScroll={onScrollThrottled}
         onClick={handleContentAreaClick}
         className={`flex-1 overflow-y-auto cursor-default ${
           isPdf 
-            ? 'p-0 flex flex-col' 
+            ? 'pt-16 pb-4 px-2 sm:px-4 md:px-8 flex flex-col' 
             : 'px-6 sm:px-12 md:px-20 lg:px-28 py-20 md:py-24'
         }`}
       >
-        <div className={isPdf ? 'flex-1 w-full' : `${getPageWidthClass()} mx-auto`}>
+        <div className={isPdf ? 'flex-1 w-full flex flex-col' : `${getPageWidthClass()} mx-auto`}>
           
-          {/* Elegant Cover Display (Uncropped & Centered, Apple Books Style) */}
+          {/* Cover Display for Text eBooks */}
           {!isPdf && (
             <div className="mb-14 text-center pt-4 sm:pt-8 select-text">
-              {/* Full Cover Frame without Unnatural Cropping */}
               <div className="relative mx-auto mb-8 flex justify-center">
                 <div 
                   className="relative group rounded-2xl p-2 bg-gradient-to-b from-black/5 to-black/15 dark:from-white/5 dark:to-white/10 shadow-2xl transition-transform duration-500 hover:scale-[1.01]"
-                  style={{ transform: `translateY(${Math.min(30, scrollY * 0.15)}px)` }}
+                  style={{ transform: `translateY(${Math.min(25, scrollY * 0.1)}px)` }}
                 >
-                  <div className="relative w-48 sm:w-56 md:w-64 aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-black/10 dark:border-white/10 bg-stone-200 dark:bg-stone-800">
+                  <div className="relative w-48 sm:w-56 aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-black/10 dark:border-white/10 bg-stone-200 dark:bg-stone-800">
                     <Image 
                       src={
-                        book?.cover && typeof book.cover === 'string' && book.cover.startsWith('http')
+                        book?.cover && typeof book.cover === 'string' && (book.cover.startsWith('http') || book.cover.startsWith('data:') || book.cover.startsWith('/'))
                           ? book.cover
                           : '/images/placeholder-book.jpg'
                       } 
                       alt={book?.judul || 'Book Cover'} 
                       fill 
                       unoptimized
-                      sizes="(max-width: 768px) 224px, 256px"
+                      sizes="(max-width: 768px) 200px, 224px"
                       className="object-contain bg-stone-900/5 dark:bg-black" 
                       referrerPolicy="no-referrer"
                       priority
                     />
                   </div>
-                  {/* Subtle Book Spine Depth Reflection */}
                   <div className="absolute inset-y-2 left-2 w-3 bg-gradient-to-r from-black/25 via-white/10 to-transparent pointer-events-none rounded-l-xl" />
                 </div>
               </div>
 
-              {/* Book Metadata & Badges */}
+              {/* Book Metadata Badge */}
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-4 border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-stone-600 dark:text-stone-300">
                 <Sparkles size={13} className="text-emerald-500" />
-                <span>{book?.genre || book?.category || 'E-Book'}</span>
+                <span>{book?.genre || 'E-Book'}</span>
               </div>
 
               <h1 className={`font-serif text-3xl sm:text-4xl md:text-5xl font-bold ${currentTheme.textClass} mb-3 tracking-tight leading-tight`}>
@@ -555,7 +464,7 @@ export default function BookReader({
               </h1>
 
               <p className={`text-base sm:text-lg ${currentTheme.textMutedClass} font-medium mb-6`}>
-                {book?.author ? `Ditulis oleh ${book.author}` : 'Bookly Reading Collection'}
+                {book?.author ? `Ditulis oleh ${book.author}` : 'Koleksi Bookly'}
               </p>
 
               {/* Editorial Info Pill */}
@@ -585,80 +494,49 @@ export default function BookReader({
             </div>
           )}
 
-          {/* Reading Body Content (EPUB / Text vs PDF) */}
+          {/* Reading Content Area: High-Performance PDF Embed OR Rich Text Reader */}
           {isPdf ? (
-            <div ref={containerRef} className="w-full min-h-full flex flex-col items-center py-6 px-2 md:px-6 relative select-text">
-              {pdfError ? (
-                <div className="my-auto flex flex-col items-center justify-center p-8 text-center max-w-md bg-white dark:bg-stone-900 rounded-3xl border border-red-100 dark:border-red-950 shadow-xl">
-                  <div className="w-14 h-14 bg-red-50 dark:bg-red-950/50 text-red-500 rounded-2xl flex items-center justify-center mb-4">
-                    <AlertCircle size={28} />
+            <div className="flex-1 w-full flex flex-col items-center justify-center min-h-[75vh] py-2">
+              <div className="w-full max-w-5xl flex-1 h-[78vh] bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden flex flex-col">
+                
+                {/* PDF Header Action Bar */}
+                <div className="bg-stone-100 dark:bg-stone-800/80 px-4 py-2.5 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-stone-700 dark:text-stone-300 font-semibold truncate">
+                    <FileText size={16} className="text-emerald-600" />
+                    <span className="truncate">{book.judul || book.title}.pdf</span>
                   </div>
-                  <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 mb-2">Gagal Memuat Dokumen</h3>
-                  <p className="text-stone-600 dark:text-stone-400 text-sm mb-6">{pdfError}</p>
-                  <button 
-                    onClick={() => {
-                      setPdfError(null);
-                      setIsLoadingPdf(true);
-                    }}
-                    className="px-6 py-2.5 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 active:scale-95 transition-all shadow-md shadow-emerald-600/20 text-sm"
-                  >
-                    Coba Lagi
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={book.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-700 hover:bg-emerald-50 hover:text-emerald-700 text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-stone-600 font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                      title="Buka PDF di tab baru"
+                    >
+                      <ExternalLink size={13} />
+                      <span className="hidden sm:inline">Tab Baru</span>
+                    </a>
+                    <a
+                      href={book.pdfUrl}
+                      download={`${book.judul || book.title || 'ebook'}.pdf`}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                      title="Unduh file PDF"
+                    >
+                      <Download size={13} />
+                      <span>Unduh</span>
+                    </a>
+                  </div>
                 </div>
-              ) : (
-                <Document
-                  file={book.pdfUrl}
-                  onLoadSuccess={onDocumentLoadSuccess}
-                  onLoadError={onDocumentLoadError}
-                  className="flex flex-col items-center"
-                  loading={
-                    <div className="my-36 flex flex-col items-center justify-center gap-3 text-stone-500">
-                      <Loader2 className="animate-spin text-emerald-600" size={36} />
-                      <p className="text-sm font-medium">Memuat halaman PDF...</p>
-                    </div>
-                  }
-                >
-                  <div className="relative group/page">
-                    {/* Floating Side Nav Controls for Desktop */}
-                    {pageNumber > 1 && (
-                      <button
-                        onClick={() => goToPage(pageNumber - 1)}
-                        className="hidden lg:flex absolute -left-16 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 dark:bg-stone-900/90 shadow-xl border border-black/10 dark:border-white/10 items-center justify-center text-stone-700 dark:text-stone-200 hover:scale-110 active:scale-95 transition-all z-10 opacity-60 hover:opacity-100"
-                        title="Halaman Sebelumnya (Panah Kiri)"
-                        aria-label="Previous Page"
-                      >
-                        <ChevronLeft size={22} />
-                      </button>
-                    )}
 
-                    <div className="bg-white rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 overflow-hidden transition-all duration-200">
-                      <Page 
-                        pageNumber={pageNumber} 
-                        scale={pdfScale}
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                        className="max-w-full"
-                        loading={
-                          <div className="w-80 sm:w-96 h-[480px] flex items-center justify-center bg-stone-100 dark:bg-stone-800">
-                            <Loader2 className="animate-spin text-emerald-600" size={26} />
-                          </div>
-                        }
-                      />
-                    </div>
-
-                    {numPages && pageNumber < numPages && (
-                      <button
-                        onClick={() => goToPage(pageNumber + 1)}
-                        className="hidden lg:flex absolute -right-16 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 dark:bg-stone-900/90 shadow-xl border border-black/10 dark:border-white/10 items-center justify-center text-stone-700 dark:text-stone-200 hover:scale-110 active:scale-95 transition-all z-10 opacity-60 hover:opacity-100"
-                        title="Halaman Selanjutnya (Panah Kanan)"
-                        aria-label="Next Page"
-                      >
-                        <ChevronRight size={22} />
-                      </button>
-                    )}
-                  </div>
-                </Document>
-              )}
+                {/* Embedded PDF Viewer */}
+                <div className="flex-1 w-full h-full relative bg-stone-100 dark:bg-stone-950">
+                  <iframe
+                    src={`${book.pdfUrl}#toolbar=1&navpanes=1`}
+                    title={book.judul || 'PDF Document'}
+                    className="w-full h-full border-0"
+                  />
+                </div>
+              </div>
             </div>
           ) : (
             /* Refined Text Typography Area */
@@ -668,7 +546,7 @@ export default function BookReader({
             >
               {book.content ? (
                 book.content.split('\n\n').map((paragraph, idx) => {
-                  const isHeading = /^(BAB|CHAPTER|BAGIAN|EPILOG|PROLOG|HUJAN BULAN JUNI)/i.test(paragraph.trim());
+                  const isHeading = /^(BAB|CHAPTER|BAGIAN|EPILOG|PROLOG)/i.test(paragraph.trim());
                   
                   if (isHeading) {
                     return (
@@ -688,7 +566,16 @@ export default function BookReader({
                   );
                 })
               ) : (
-                <p className="text-center italic opacity-60 py-12">Konten buku tidak tersedia.</p>
+                <div className="text-center py-16 text-stone-500 space-y-4">
+                  <BookOpen size={36} className="mx-auto text-stone-400 opacity-60" />
+                  <p className="italic">Konten teks lengkap untuk buku ini sedang disiapkan.</p>
+                  {(book.deskripsi || book.synopsis) && (
+                    <div className="max-w-md mx-auto p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 text-left">
+                      <h4 className="font-bold text-xs uppercase mb-1">Sinopsis:</h4>
+                      <p className="text-sm opacity-80 leading-relaxed">{book.deskripsi || book.synopsis}</p>
+                    </div>
+                  )}
+                </div>
               )}
             </article>
           )}
@@ -696,91 +583,35 @@ export default function BookReader({
         </div>
       </div>
 
-      {/* 4. Discreet Bottom Action Dock (Apple Books / Google Play Books Style) */}
+      {/* 4. Bottom Action Dock */}
       <AnimatePresence>
         {showControls && (
           <motion.footer
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className={`fixed bottom-0 left-0 right-0 z-40 px-4 md:px-8 py-3 border-t ${currentTheme.borderClass} ${currentTheme.surfaceClass} backdrop-blur-xl shadow-lg transition-colors duration-300`}
           >
             <div className="max-w-4xl mx-auto flex items-center justify-between gap-3 text-xs">
               
-              {/* Left Dock Item: Chapter or PDF Navigation */}
+              {/* Left Dock Item: Table of contents */}
               <div className="flex items-center gap-2">
-                {!isPdf ? (
+                {!isPdf && (
                   <button
                     onClick={() => setShowChaptersDrawer(true)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium border ${currentTheme.borderClass} hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all active:scale-95`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium border ${currentTheme.borderClass} hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all active:scale-95 cursor-pointer`}
                     title="Daftar Bab"
                   >
                     <List size={15} />
                     <span className="hidden sm:inline font-semibold">Daftar Isi</span>
                   </button>
-                ) : (
-                  <button
-                    onClick={() => setShowPdfScrubber(!showPdfScrubber)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium border transition-all ${
-                      showPdfScrubber 
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
-                        : `${currentTheme.borderClass} hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass}`
-                    }`}
-                    title="Slider Halaman Cepat"
-                  >
-                    <SlidersHorizontal size={14} />
-                    <span className="hidden sm:inline">{progress}%</span>
-                  </button>
                 )}
               </div>
 
-              {/* Center Dock Item: Discreet Progress Info & Accurate PDF Controls */}
+              {/* Center Dock Item: Progress & Stats */}
               <div className="flex items-center gap-2">
-                {isPdf ? (
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <button 
-                      onClick={() => goToPage(pageNumber - 1)}
-                      disabled={pageNumber <= 1 || !numPages}
-                      className={`p-1.5 rounded-lg border ${currentTheme.borderClass} hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all disabled:opacity-20 disabled:cursor-not-allowed`}
-                      title="Halaman Sebelumnya"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-
-                    <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1.5 mx-1">
-                      <input 
-                        ref={inputRef}
-                        type="text" 
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={pageInput}
-                        onChange={(e) => setPageInput(e.target.value)}
-                        onBlur={() => {
-                          const parsed = parseInt(pageInput, 10);
-                          if (!isNaN(parsed)) goToPage(parsed);
-                          else setPageInput(pageNumber.toString());
-                        }}
-                        disabled={!numPages}
-                        className={`w-12 h-7 px-1 text-center font-bold text-xs ${currentTheme.textClass} bg-black/5 dark:bg-white/10 border ${currentTheme.borderClass} rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
-                        title="Ketik nomor halaman"
-                      />
-                      <span className={currentTheme.textMutedClass}>/</span>
-                      <span className={`font-bold ${currentTheme.textClass}`}>
-                        {numPages !== null ? numPages : '···'}
-                      </span>
-                    </form>
-
-                    <button 
-                      onClick={() => goToPage(pageNumber + 1)}
-                      disabled={!numPages || pageNumber >= numPages}
-                      className={`p-1.5 rounded-lg border ${currentTheme.borderClass} hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass} transition-all disabled:opacity-20 disabled:cursor-not-allowed`}
-                      title="Halaman Selanjutnya"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                ) : (
+                {!isPdf ? (
                   <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2 font-medium">
                       <span className={`font-bold ${currentTheme.textClass}`}>{progress}% Dibaca</span>
@@ -794,40 +625,23 @@ export default function BookReader({
                       )}
                     </div>
                   </div>
+                ) : (
+                  <span className={`font-semibold ${currentTheme.textMutedClass}`}>
+                    Membaca Dokumen PDF
+                  </span>
                 )}
               </div>
 
-              {/* Right Dock Item: The Iconic "Aa" Reading Settings Button */}
+              {/* Right Dock Item: Reading Settings "Aa" */}
               <div className="flex items-center gap-1.5">
-                {isPdf && (
-                  <div className="hidden sm:flex items-center gap-1 mr-1">
-                    <button 
-                      onClick={() => setPdfScale(s => Math.max(0.6, Number((s - 0.15).toFixed(2))))} 
-                      className={`p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg ${currentTheme.textClass}`}
-                      title="Perkecil"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <span className={`text-[11px] font-bold px-1 ${currentTheme.textClass}`}>{Math.round(pdfScale * 100)}%</span>
-                    <button 
-                      onClick={() => setPdfScale(s => Math.min(2.5, Number((s + 0.15).toFixed(2))))} 
-                      className={`p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg ${currentTheme.textClass}`}
-                      title="Perbesar"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                )}
-
-                {/* Relocated Reading Settings "Aa" Button */}
                 <button
                   onClick={() => setShowSettingsSheet(prev => !prev)}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold border transition-all active:scale-95 ${
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold border transition-all active:scale-95 cursor-pointer ${
                     showSettingsSheet 
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20' 
                       : `border ${currentTheme.borderClass} hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textClass}`
                   }`}
-                  title="Pengaturan Tampilan & Tipografi (T)"
+                  title="Pengaturan Tampilan (T)"
                   aria-label="Reading Settings"
                 >
                   <Type size={15} />
@@ -836,37 +650,11 @@ export default function BookReader({
               </div>
 
             </div>
-
-            {/* Expandable PDF Page Slider */}
-            <AnimatePresence>
-              {isPdf && showPdfScrubber && numPages && numPages > 1 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden pt-3 border-t border-black/5 dark:border-white/5 mt-2"
-                >
-                  <div className="max-w-md mx-auto flex items-center gap-3 px-2">
-                    <span className={`text-[11px] font-semibold ${currentTheme.textMutedClass} w-6 text-right`}>1</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={numPages}
-                      value={pageNumber}
-                      onChange={(e) => goToPage(parseInt(e.target.value, 10))}
-                      className="flex-1 h-1.5 bg-black/10 dark:bg-white/20 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-                      aria-label="PDF Scrubber"
-                    />
-                    <span className={`text-[11px] font-semibold ${currentTheme.textMutedClass} w-6`}>{numPages}</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.footer>
         )}
       </AnimatePresence>
 
-      {/* 5. Discreet "Aa" Reading Settings Popover Sheet (Apple Books / Google Play Books Style) */}
+      {/* 5. Reading Settings Popover Sheet */}
       <AnimatePresence>
         {showSettingsSheet && (
           <div 
@@ -876,7 +664,6 @@ export default function BookReader({
             }}
           >
             <motion.div
-              ref={settingsSheetRef}
               initial={{ opacity: 0, y: 30, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 30, scale: 0.96 }}
@@ -890,7 +677,7 @@ export default function BookReader({
                 </div>
                 <button 
                   onClick={() => setShowSettingsSheet(false)}
-                  className={`p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textMutedClass}`}
+                  className={`p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textMutedClass} cursor-pointer`}
                 >
                   <X size={16} />
                 </button>
@@ -910,7 +697,7 @@ export default function BookReader({
                         <button
                           key={id}
                           onClick={() => setThemeId(id)}
-                          className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl border transition-all ${
+                          className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl border transition-all cursor-pointer ${
                             isSelected 
                               ? 'border-emerald-600 ring-2 ring-emerald-500/30 scale-105 shadow-sm' 
                               : 'border-black/10 dark:border-white/10 hover:border-black/30'
@@ -942,7 +729,7 @@ export default function BookReader({
                       <div className="flex items-center gap-3 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl border border-black/5 dark:border-white/5">
                         <button 
                           onClick={() => adjustFontSize(-2)}
-                          className={`p-2 rounded-xl bg-white dark:bg-stone-800 shadow-xs hover:bg-stone-50 ${currentTheme.textClass} transition-all active:scale-95`}
+                          className={`p-2 rounded-xl bg-white dark:bg-stone-800 shadow-xs hover:bg-stone-50 ${currentTheme.textClass} transition-all active:scale-95 cursor-pointer`}
                           aria-label="Decrease font size"
                         >
                           <Minus size={14} />
@@ -962,7 +749,7 @@ export default function BookReader({
                         />
                         <button 
                           onClick={() => adjustFontSize(2)}
-                          className={`p-2 rounded-xl bg-white dark:bg-stone-800 shadow-xs hover:bg-stone-50 ${currentTheme.textClass} transition-all active:scale-95`}
+                          className={`p-2 rounded-xl bg-white dark:bg-stone-800 shadow-xs hover:bg-stone-50 ${currentTheme.textClass} transition-all active:scale-95 cursor-pointer`}
                           aria-label="Increase font size"
                         >
                           <Plus size={14} />
@@ -984,7 +771,7 @@ export default function BookReader({
                           <button
                             key={f.id}
                             onClick={() => setFontFamily(f.id as FontFamily)}
-                            className={`px-3 py-2 rounded-xl border text-center transition-all ${
+                            className={`px-3 py-2 rounded-xl border text-center transition-all cursor-pointer ${
                               fontFamily === f.id 
                                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-bold' 
                                 : `border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 ${currentTheme.textClass}`
@@ -1008,7 +795,7 @@ export default function BookReader({
                             <button
                               key={lh}
                               onClick={() => setLineHeight(lh)}
-                              className={`flex-1 py-1 text-[10px] font-semibold rounded-lg capitalize transition-all ${
+                              className={`flex-1 py-1 text-[10px] font-semibold rounded-lg capitalize transition-all cursor-pointer ${
                                 lineHeight === lh 
                                   ? 'bg-white dark:bg-stone-800 shadow-xs text-emerald-600 dark:text-emerald-400' 
                                   : `${currentTheme.textMutedClass} hover:text-stone-900 dark:hover:text-stone-100`
@@ -1027,7 +814,7 @@ export default function BookReader({
                         <div className="flex bg-black/5 dark:bg-white/5 p-1 rounded-xl border border-black/5 dark:border-white/5">
                           <button
                             onClick={() => setTextAlign('left')}
-                            className={`flex-1 py-1 flex items-center justify-center rounded-lg transition-all ${
+                            className={`flex-1 py-1 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
                               textAlign === 'left' 
                                 ? 'bg-white dark:bg-stone-800 shadow-xs text-emerald-600 dark:text-emerald-400' 
                                 : currentTheme.textMutedClass
@@ -1038,7 +825,7 @@ export default function BookReader({
                           </button>
                           <button
                             onClick={() => setTextAlign('justify')}
-                            className={`flex-1 py-1 flex items-center justify-center rounded-lg transition-all ${
+                            className={`flex-1 py-1 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
                               textAlign === 'justify' 
                                 ? 'bg-white dark:bg-stone-800 shadow-xs text-emerald-600 dark:text-emerald-400' 
                                 : currentTheme.textMutedClass
@@ -1065,7 +852,7 @@ export default function BookReader({
                           <button
                             key={w.id}
                             onClick={() => setPageWidth(w.id as PageWidth)}
-                            className={`flex-1 py-1 text-[10px] font-semibold rounded-lg transition-all ${
+                            className={`flex-1 py-1 text-[10px] font-semibold rounded-lg transition-all cursor-pointer ${
                               pageWidth === w.id 
                                 ? 'bg-white dark:bg-stone-800 shadow-xs text-emerald-600 dark:text-emerald-400' 
                                 : currentTheme.textMutedClass
@@ -1107,7 +894,7 @@ export default function BookReader({
                 </div>
                 <button 
                   onClick={() => setShowChaptersDrawer(false)}
-                  className={`p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textMutedClass}`}
+                  className={`p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 ${currentTheme.textMutedClass} cursor-pointer`}
                 >
                   <X size={18} />
                 </button>
@@ -1118,14 +905,13 @@ export default function BookReader({
                   <button
                     key={chap.id}
                     onClick={() => jumpToChapter(chap.lineIndex)}
-                    className={`w-full text-left px-3.5 py-3 rounded-2xl text-xs font-medium transition-all flex items-center justify-between group ${
+                    className={`w-full text-left px-3.5 py-3 rounded-2xl text-xs font-medium transition-all flex items-center justify-between group cursor-pointer ${
                       idx === 0 
                         ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold' 
                         : `hover:bg-black/5 dark:hover:bg-white/5 ${currentTheme.textClass}`
                     }`}
                   >
                     <span className="truncate pr-2">{chap.title}</span>
-                    <ChevronRight size={14} className="opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
                 ))}
               </div>
