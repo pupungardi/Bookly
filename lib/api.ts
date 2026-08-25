@@ -1,4 +1,5 @@
 import { Book } from '@/types/book';
+import { getStoredUserState } from '@/lib/auth-storage';
 
 export interface FetchBooksParams {
   sort?: string;
@@ -18,6 +19,27 @@ export interface FetchBooksResponse {
 }
 
 const LOCAL_STORAGE_CATALOG_KEY = 'bookly_admin_dynamic_books';
+
+/**
+ * Get client auth headers based on currently stored user credentials
+ */
+export function getClientAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (typeof window !== 'undefined') {
+    const userState = getStoredUserState();
+    if (userState.token) {
+      headers['Authorization'] = `Bearer ${userState.token}`;
+    }
+    if (userState.role) {
+      headers['x-user-role'] = userState.role;
+    }
+  }
+
+  return headers;
+}
 
 // Helper to get cached admin books from localStorage
 export function getLocalAdminBooks(): Book[] {
@@ -77,13 +99,7 @@ export async function fetchBooks(params: FetchBooksParams = {}): Promise<FetchBo
     if (totalCatalogCount === 0 && typeof window !== 'undefined') {
       const localBooks = getLocalAdminBooks();
       if (localBooks.length > 0) {
-        // Sync to server silently
         syncCatalogToServer(localBooks).catch(() => {});
-      }
-    } else if (totalCatalogCount > 0 && typeof window !== 'undefined') {
-      // Keep local store in sync
-      if (!params.keyword && !params.genre && (!params.page || params.page === 1)) {
-        // We can save the master list if we fetch all
       }
     }
 
@@ -96,7 +112,6 @@ export async function fetchBooks(params: FetchBooksParams = {}): Promise<FetchBo
     };
   } catch (error) {
     console.error('Error fetching books from API:', error);
-    // Offline fallback from localStorage
     const localBooks = getLocalAdminBooks();
     return {
       books: localBooks,
@@ -108,20 +123,22 @@ export async function fetchBooks(params: FetchBooksParams = {}): Promise<FetchBo
   }
 }
 
-export async function createBook(bookData: Partial<Book>): Promise<{ success: boolean; book?: Book; error?: string }> {
+export async function createBook(bookData: Partial<Book>): Promise<{ success: boolean; book?: Book; error?: string; statusCode?: number }> {
   try {
+    const authHeaders = getClientAuthHeaders();
     const response = await fetch('/api/buku', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: authHeaders,
       body: JSON.stringify(bookData),
     });
 
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to create ebook');
+      const errorMsg = data.error || (response.status === 403 
+        ? 'Akses Ditolak (403): Anda tidak memiliki izin Administrator untuk mempublikasikan buku.' 
+        : 'Gagal membuat ebook.');
+      return { success: false, error: errorMsg, statusCode: response.status };
     }
 
     // Update local cache
@@ -130,27 +147,29 @@ export async function createBook(bookData: Partial<Book>): Promise<{ success: bo
       saveLocalAdminBooks([data.book, ...current.filter(b => b.id !== data.book.id)]);
     }
 
-    return { success: true, book: data.book };
+    return { success: true, book: data.book, statusCode: 201 };
   } catch (error: any) {
     console.error('Error in createBook:', error);
-    return { success: false, error: error?.message || 'Network error creating ebook' };
+    return { success: false, error: error?.message || 'Gagal terhubung ke server', statusCode: 500 };
   }
 }
 
-export async function updateBook(bookData: Partial<Book> & { id: string }): Promise<{ success: boolean; book?: Book; error?: string }> {
+export async function updateBook(bookData: Partial<Book> & { id: string }): Promise<{ success: boolean; book?: Book; error?: string; statusCode?: number }> {
   try {
+    const authHeaders = getClientAuthHeaders();
     const response = await fetch('/api/buku', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: authHeaders,
       body: JSON.stringify(bookData),
     });
 
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to update ebook');
+      const errorMsg = data.error || (response.status === 403 
+        ? 'Akses Ditolak (403): Anda tidak memiliki izin Administrator untuk mengubah buku.' 
+        : 'Gagal memperbarui ebook.');
+      return { success: false, error: errorMsg, statusCode: response.status };
     }
 
     if (data.book && typeof window !== 'undefined') {
@@ -158,23 +177,28 @@ export async function updateBook(bookData: Partial<Book> & { id: string }): Prom
       saveLocalAdminBooks(current.map(b => (b.id === data.book.id ? data.book : b)));
     }
 
-    return { success: true, book: data.book };
+    return { success: true, book: data.book, statusCode: 200 };
   } catch (error: any) {
     console.error('Error in updateBook:', error);
-    return { success: false, error: error?.message || 'Network error updating ebook' };
+    return { success: false, error: error?.message || 'Gagal terhubung ke server', statusCode: 500 };
   }
 }
 
-export async function deleteBook(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteBook(id: string): Promise<{ success: boolean; error?: string; statusCode?: number }> {
   try {
+    const authHeaders = getClientAuthHeaders();
     const response = await fetch(`/api/buku?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      headers: authHeaders,
     });
 
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to delete ebook');
+      const errorMsg = data.error || (response.status === 403 
+        ? 'Akses Ditolak (403): Anda tidak memiliki izin Administrator untuk menghapus buku.' 
+        : 'Gagal menghapus ebook.');
+      return { success: false, error: errorMsg, statusCode: response.status };
     }
 
     if (typeof window !== 'undefined') {
@@ -182,46 +206,51 @@ export async function deleteBook(id: string): Promise<{ success: boolean; error?
       saveLocalAdminBooks(current.filter(b => b.id !== id));
     }
 
-    return { success: true };
+    return { success: true, statusCode: 200 };
   } catch (error: any) {
     console.error('Error in deleteBook:', error);
-    return { success: false, error: error?.message || 'Network error deleting ebook' };
+    return { success: false, error: error?.message || 'Gagal terhubung ke server', statusCode: 500 };
   }
 }
 
-export async function clearAllCatalog(): Promise<{ success: boolean; error?: string }> {
+export async function clearAllCatalog(): Promise<{ success: boolean; error?: string; statusCode?: number }> {
   try {
+    const authHeaders = getClientAuthHeaders();
     const response = await fetch('/api/buku', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify({ action: 'clear' }),
     });
 
     const data = await response.json();
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to clear catalog');
+      const errorMsg = data.error || (response.status === 403 
+        ? 'Akses Ditolak (403): Anda tidak memiliki izin Administrator untuk menghapus seluruh katalog.' 
+        : 'Gagal membersihkan katalog.');
+      return { success: false, error: errorMsg, statusCode: response.status };
     }
 
     if (typeof window !== 'undefined') {
       saveLocalAdminBooks([]);
     }
 
-    return { success: true };
+    return { success: true, statusCode: 200 };
   } catch (error: any) {
-    return { success: false, error: error?.message || 'Failed to clear catalog' };
+    return { success: false, error: error?.message || 'Gagal membersihkan katalog', statusCode: 500 };
   }
 }
 
-export async function syncCatalogToServer(books: Book[]): Promise<{ success: boolean }> {
+export async function syncCatalogToServer(books: Book[]): Promise<{ success: boolean; error?: string }> {
   try {
+    const authHeaders = getClientAuthHeaders();
     const response = await fetch('/api/buku', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify({ action: 'sync', books }),
     });
     const data = await response.json();
-    return { success: !!data.success };
-  } catch (e) {
-    return { success: false };
+    return { success: !!data.success, error: data.error };
+  } catch (e: any) {
+    return { success: false, error: e?.message };
   }
 }

@@ -8,8 +8,10 @@ import {
   syncClientBooks,
   CreateBookInput,
 } from '@/lib/books-store';
+import { validateServerApiAuth } from '@/lib/rbac';
 
 // GET: Fetch dynamic ebooks with filtering, search, pagination, and available genres
+// PUBLIC ENDPOINT - All users & guests can browse the catalog
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
@@ -43,36 +45,66 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to fetch books' },
+      { success: false, error: error?.message || 'Gagal memuat daftar buku' },
       { status: 500 }
     );
   }
 }
 
-// POST: Admin endpoint to create and publish a new eBook
+// POST: Admin endpoint to create, sync, or clear catalog
+// PROTECTED ENDPOINT - Requires 'books:create' or 'books:manage' or 'admin:access'
 export async function POST(request: NextRequest) {
   try {
+    // 1. Server-Side RBAC Verification
+    const authCheck = validateServerApiAuth(request, 'books:create');
+    if (!authCheck.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: authCheck.error || 'Akses Ditolak: Hak akses Administrator diperlukan.',
+          code: 'UNAUTHORIZED_ACCESS',
+        },
+        { status: authCheck.statusCode }
+      );
+    }
+
     const body = await request.json();
 
     // Check for bulk sync or clear commands
     if (body.action === 'sync' && Array.isArray(body.books)) {
+      const syncAuth = validateServerApiAuth(request, 'books:manage');
+      if (!syncAuth.authorized) {
+        return NextResponse.json(
+          { success: false, error: syncAuth.error, code: 'FORBIDDEN' },
+          { status: syncAuth.statusCode }
+        );
+      }
+
       syncClientBooks(body.books);
       return NextResponse.json({
         success: true,
-        message: 'Catalog synchronized successfully',
+        message: 'Katalog berhasil disinkronisasikan',
         count: body.books.length,
       });
     }
 
     if (body.action === 'clear') {
+      const deleteAuth = validateServerApiAuth(request, 'books:delete');
+      if (!deleteAuth.authorized) {
+        return NextResponse.json(
+          { success: false, error: deleteAuth.error, code: 'FORBIDDEN' },
+          { status: deleteAuth.statusCode }
+        );
+      }
+
       const { count } = clearAllDynamicBooks();
       return NextResponse.json({
         success: true,
-        message: `Cleared all ${count} books from the dynamic catalog`,
+        message: `Berhasil membersihkan ${count} buku dari katalog dinamis`,
       });
     }
 
-    // Input validation
+    // Input validation for book creation
     const input: CreateBookInput = {
       judul: body.judul || body.title,
       author: body.author,
@@ -93,14 +125,14 @@ export async function POST(request: NextRequest) {
 
     if (!input.judul || !input.judul.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Book title (Judul Buku) is required.' },
+        { success: false, error: 'Judul buku wajib diisi.' },
         { status: 400 }
       );
     }
 
     if (!input.author || !input.author.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Author name (Penulis) is required.' },
+        { success: false, error: 'Nama penulis wajib diisi.' },
         { status: 400 }
       );
     }
@@ -113,28 +145,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: 'eBook uploaded and published successfully!',
+        message: 'eBook berhasil diunggah dan dipublikasikan!',
         book: result.book,
       },
       { status: 201 }
     );
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to process request' },
+      { success: false, error: error?.message || 'Gagal memproses permintaan' },
       { status: 500 }
     );
   }
 }
 
 // PUT: Admin endpoint to edit an existing eBook
+// PROTECTED ENDPOINT - Requires 'books:edit' permission
 export async function PUT(request: NextRequest) {
   try {
+    // 1. Server-Side RBAC Verification
+    const authCheck = validateServerApiAuth(request, 'books:edit');
+    if (!authCheck.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: authCheck.error || 'Akses Ditolak: Hak akses Administrator diperlukan untuk mengedit buku.',
+          code: 'UNAUTHORIZED_ACCESS',
+        },
+        { status: authCheck.statusCode }
+      );
+    }
+
     const body = await request.json();
     const id = body.id;
 
     if (!id) {
       return NextResponse.json(
-        { success: false, error: 'Book ID is required for updating.' },
+        { success: false, error: 'ID Buku diperlukan untuk memperbarui data.' },
         { status: 400 }
       );
     }
@@ -146,26 +192,40 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'eBook updated successfully',
+      message: 'eBook berhasil diperbarui',
       book: result.book,
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to update book' },
+      { success: false, error: error?.message || 'Gagal memperbarui buku' },
       { status: 500 }
     );
   }
 }
 
 // DELETE: Admin endpoint to remove an eBook from the catalog
+// PROTECTED ENDPOINT - Requires 'books:delete' permission
 export async function DELETE(request: NextRequest) {
   try {
+    // 1. Server-Side RBAC Verification
+    const authCheck = validateServerApiAuth(request, 'books:delete');
+    if (!authCheck.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: authCheck.error || 'Akses Ditolak: Hak akses Administrator diperlukan untuk menghapus buku.',
+          code: 'UNAUTHORIZED_ACCESS',
+        },
+        { status: authCheck.statusCode }
+      );
+    }
+
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
 
     if (!id) {
       return NextResponse.json(
-        { success: false, error: 'Book ID parameter is required for deletion.' },
+        { success: false, error: 'Parameter ID buku diperlukan untuk penghapusan.' },
         { status: 400 }
       );
     }
@@ -177,11 +237,11 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'eBook removed from catalog',
+      message: 'eBook berhasil dihapus dari katalog',
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to delete book' },
+      { success: false, error: error?.message || 'Gagal menghapus buku' },
       { status: 500 }
     );
   }

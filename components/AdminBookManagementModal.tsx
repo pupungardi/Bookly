@@ -27,11 +27,17 @@ import {
   Globe,
   Sliders,
   RefreshCw,
-  Plus
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 import Image from 'next/image';
-import { Book } from '@/types/book';
+import { Book, UserState } from '@/types/book';
 import { createBook, updateBook, deleteBook, clearAllCatalog } from '@/lib/api';
+import { getStoredUserState, switchUserRole } from '@/lib/auth-storage';
+import { isAdmin, ROLE_METADATA } from '@/lib/rbac';
 
 interface AdminBookManagementModalProps {
   isOpen: boolean;
@@ -378,6 +384,61 @@ export default function AdminBookManagementModal({
 
   if (!isOpen) return null;
 
+  const currentUserState = getStoredUserState();
+  const hasAdminPrivilege = isAdmin(currentUserState);
+
+  if (!hasAdminPrivilege) {
+    const currentRole = currentUserState.role || 'user';
+    const roleMeta = ROLE_METADATA[currentRole];
+
+    return (
+      <AnimatePresence>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl border border-red-200 text-center"
+          >
+            <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <ShieldAlert size={32} />
+            </div>
+            <span className="inline-block px-3 py-0.5 bg-red-50 text-red-700 text-xs font-bold rounded-full border border-red-200 mb-2 font-mono">
+              403 FORBIDDEN
+            </span>
+            <h3 className="text-xl font-bold text-stone-900 mb-2">
+              Akses Ditolak
+            </h3>
+            <p className="text-stone-600 text-xs sm:text-sm leading-relaxed mb-6">
+              Panel Manajemen eBook memerlukan hak akses <strong>Administrator</strong>. Peran Anda saat ini adalah <span className={`px-2 py-0.5 rounded font-bold ${roleMeta.badgeClass}`}>{roleMeta.name}</span>.
+            </p>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  switchUserRole('admin');
+                  onShowToast('Peran berhasil diubah menjadi Administrator (Akses Diberikan).', 'success');
+                }}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound size={14} />
+                <span>Beralih ke Akun Administrator</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl font-bold text-xs transition-all cursor-pointer"
+              >
+                Tutup Jendela
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </AnimatePresence>
+    );
+  }
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-stone-900/70 backdrop-blur-md overflow-y-auto">
@@ -389,26 +450,26 @@ export default function AdminBookManagementModal({
           className="bg-white w-full max-w-4xl max-h-[92vh] rounded-[2rem] shadow-2xl border border-stone-200 flex flex-col overflow-hidden my-auto"
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/70">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-200">
+          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/70 gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-200 shrink-0">
                 <Database size={20} />
               </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
-                  <span>Admin eBook Management Studio</span>
-                  <span className="text-[11px] font-sans font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-xl font-serif font-bold text-stone-900 flex flex-wrap sm:flex-nowrap items-center gap-2">
+                  <span className="truncate">Admin eBook Management Studio</span>
+                  <span className="text-[11px] font-sans font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0">
                     CMS Active
                   </span>
                 </h2>
-                <p className="text-xs text-stone-500">Upload, publish, and manage eBooks dynamically for real-time catalog display</p>
+                <p className="text-xs text-stone-500 truncate sm:whitespace-normal">Upload, publish, and manage eBooks dynamically for real-time catalog display</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors"
+              className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors shrink-0 cursor-pointer"
               aria-label="Close modal"
             >
               <X size={20} />
@@ -416,49 +477,49 @@ export default function AdminBookManagementModal({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="px-6 border-b border-stone-200 flex items-center justify-between gap-2 bg-white">
-            <div className="flex gap-2">
+          <div className="px-4 sm:px-6 border-b border-stone-200 flex items-center justify-between gap-2 bg-white overflow-x-auto no-scrollbar">
+            <div className="flex gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setActiveTab('upload');
                   if (!editingBookId) resetForm();
                 }}
-                className={`py-3.5 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+                className={`py-3.5 px-3 sm:px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'upload'
                     ? 'border-emerald-600 text-emerald-700'
                     : 'border-transparent text-stone-500 hover:text-stone-800'
                 }`}
               >
-                {editingBookId ? <Edit3 size={16} /> : <BookPlus size={16} />}
-                <span>{editingBookId ? 'Edit eBook Details' : 'Upload & Publish eBook'}</span>
+                {editingBookId ? <Edit3 size={16} className="shrink-0" /> : <BookPlus size={16} className="shrink-0" />}
+                <span className="whitespace-nowrap">{editingBookId ? 'Edit eBook Details' : 'Upload & Publish eBook'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('manage')}
-                className={`py-3.5 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+                className={`py-3.5 px-3 sm:px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'manage'
                     ? 'border-emerald-600 text-emerald-700'
                     : 'border-transparent text-stone-500 hover:text-stone-800'
                 }`}
               >
-                <Layers size={16} />
-                <span>Manage Catalog ({catalogBooks.length})</span>
+                <Layers size={16} className="shrink-0" />
+                <span className="whitespace-nowrap">Manage Catalog ({catalogBooks.length})</span>
               </button>
             </div>
 
             {/* Quick Actions */}
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={handleQuickSeedStarter}
                 disabled={isSubmitting}
-                className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                 title="Add a sample modern eBook to test reading"
               >
-                <Sparkles size={13} />
-                <span>Add Sample Book</span>
+                <Sparkles size={13} className="shrink-0" />
+                <span className="whitespace-nowrap">Add Sample Book</span>
               </button>
             </div>
           </div>
@@ -568,17 +629,17 @@ export default function AdminBookManagementModal({
                   <div className="space-y-4">
                     {/* Cover Section */}
                     <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
-                          <ImageIcon size={15} className="text-emerald-600" />
-                          <span>Book Cover Image</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+                        <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                          <ImageIcon size={15} className="text-emerald-600 shrink-0" />
+                          <span className="whitespace-nowrap">Book Cover Image</span>
                         </label>
-                        <div className="flex gap-1 bg-stone-200/70 p-0.5 rounded-lg text-[11px]">
+                        <div className="flex flex-wrap sm:flex-nowrap gap-1 bg-stone-200/70 p-0.5 rounded-lg text-[11px] shrink-0">
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, coverType: 'upload' })}
-                            className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                              formData.coverType === 'upload' ? 'bg-white text-emerald-700 shadow-xs' : 'text-stone-600'
+                            className={`px-2.5 py-1 rounded-md font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                              formData.coverType === 'upload' ? 'bg-white text-emerald-700 shadow-xs' : 'text-stone-600 hover:text-stone-900'
                             }`}
                           >
                             Upload File
@@ -586,8 +647,8 @@ export default function AdminBookManagementModal({
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, coverType: 'url' })}
-                            className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                              formData.coverType === 'url' ? 'bg-white text-emerald-700 shadow-xs' : 'text-stone-600'
+                            className={`px-2.5 py-1 rounded-md font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                              formData.coverType === 'url' ? 'bg-white text-emerald-700 shadow-xs' : 'text-stone-600 hover:text-stone-900'
                             }`}
                           >
                             Image URL
@@ -595,8 +656,8 @@ export default function AdminBookManagementModal({
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, coverType: 'generated', coverBase64: '', coverUrl: '' })}
-                            className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                              formData.coverType === 'generated' ? 'bg-white text-emerald-700 shadow-xs' : 'text-stone-600'
+                            className={`px-2.5 py-1 rounded-md font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                              formData.coverType === 'generated' ? 'bg-white text-emerald-700 shadow-xs' : 'text-stone-600 hover:text-stone-900'
                             }`}
                           >
                             Typographic
@@ -664,7 +725,7 @@ export default function AdminBookManagementModal({
                                   unoptimized
                                 />
                               </div>
-                              <span className="text-[11px] text-emerald-700 font-semibold">Image URL Preview Active</span>
+                              <span className="text-[11px] text-emerald-700 font-semibold whitespace-nowrap">Image URL Preview Active</span>
                             </div>
                           )}
                         </div>
@@ -682,17 +743,17 @@ export default function AdminBookManagementModal({
 
                     {/* eBook Content / Reader Format Section */}
                     <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
-                          <FileText size={15} className="text-blue-600" />
-                          <span>eBook Format &amp; Content</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+                        <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                          <FileText size={15} className="text-blue-600 shrink-0" />
+                          <span className="whitespace-nowrap">eBook Format &amp; Content</span>
                         </label>
-                        <div className="flex gap-1 bg-stone-200/70 p-0.5 rounded-lg text-[11px]">
+                        <div className="flex flex-wrap sm:flex-nowrap gap-1 bg-stone-200/70 p-0.5 rounded-lg text-[11px] shrink-0">
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, contentType: 'text' })}
-                            className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                              formData.contentType === 'text' ? 'bg-white text-blue-700 shadow-xs' : 'text-stone-600'
+                            className={`px-2.5 py-1 rounded-md font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                              formData.contentType === 'text' ? 'bg-white text-blue-700 shadow-xs' : 'text-stone-600 hover:text-stone-900'
                             }`}
                           >
                             Chapter Text
@@ -700,8 +761,8 @@ export default function AdminBookManagementModal({
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, contentType: 'pdf' })}
-                            className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                              formData.contentType === 'pdf' ? 'bg-white text-blue-700 shadow-xs' : 'text-stone-600'
+                            className={`px-2.5 py-1 rounded-md font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                              formData.contentType === 'pdf' ? 'bg-white text-blue-700 shadow-xs' : 'text-stone-600 hover:text-stone-900'
                             }`}
                           >
                             PDF Document

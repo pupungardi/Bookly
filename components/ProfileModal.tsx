@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { 
   X, User, Heart, Star, MessageCircle, 
   FileCheck, Shield, LogOut, ClipboardList, CircleUserRound, Download,
-  Lock, Eye, EyeOff, Sparkles, ArrowRight, Trash2, BookOpen, ShieldAlert
+  Lock, Eye, EyeOff, Sparkles, ArrowRight, Trash2, BookOpen, ShieldAlert,
+  ShieldCheck, KeyRound, Sliders
 } from 'lucide-react';
 import DeleteBookDataModal from './DeleteBookDataModal';
-import { UserState } from '@/types/book';
-import { getStoredUserState } from '@/lib/auth-storage';
+import { UserState, UserRole } from '@/types/book';
+import { getStoredUserState, switchUserRole } from '@/lib/auth-storage';
+import { isAdmin, ROLE_METADATA } from '@/lib/rbac';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -50,6 +52,7 @@ export default function ProfileModal({
   const router = useRouter();
   const [isLoginView, setIsLoginView] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('user');
   const [tempUsername, setTempUsername] = useState('');
   const [tempEmail, setTempEmail] = useState('');
   const [tempPassword, setTempPassword] = useState('');
@@ -62,9 +65,25 @@ export default function ProfileModal({
   ];
 
   const userState: UserState = getStoredUserState();
-  const totalBookData = (userState.downloads?.length || 0) + (userState.bookmarks?.length || 0);
+  const isUserAdmin = isAdmin(userState);
+  const currentRole = userState.role || 'user';
+  const roleMeta = ROLE_METADATA[currentRole];
 
   const menuItems = [
+    ...(isUserAdmin ? [
+      { 
+        icon: ShieldCheck, 
+        label: 'Panel Admin CMS & Studio', 
+        action: () => {
+          onClose();
+          router.push('/admin');
+        },
+        badge: 'ADMIN',
+        highlight: true,
+        desc: 'Manajemen buku & otorisasi RBAC'
+      },
+      { divider: true },
+    ] : []),
     { icon: ClipboardList, label: 'Transaksi', action: onTransaksiClick },
     { icon: Heart, label: 'Wishlist & Bookmark', action: onWishlistClick, badge: userState.bookmarks?.length ? `${userState.bookmarks.length}` : undefined },
     { icon: Download, label: 'Download Offline', action: onDownloadOfflineClick, badge: userState.downloads?.length ? `${userState.downloads.length}` : undefined },
@@ -96,10 +115,18 @@ export default function ProfileModal({
     }
   };
 
-  const handleQuickDemoFill = () => {
-    setTempUsername('Pembaca Setia');
-    setTempEmail('pembaca@bookly.id');
-    setTempPassword('demo12345');
+  const handleQuickDemoFill = (role: 'admin' | 'user') => {
+    if (role === 'admin') {
+      setTempUsername('Admin Bookly');
+      setTempEmail('admin@bookly.id');
+      setTempPassword('admin12345');
+      setSelectedRole('admin');
+    } else {
+      setTempUsername('Pembaca Setia');
+      setTempEmail('pembaca@bookly.id');
+      setTempPassword('demo12345');
+      setSelectedRole('user');
+    }
   };
 
   return (
@@ -118,15 +145,13 @@ export default function ProfileModal({
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="relative bg-white w-full max-w-md h-full md:h-auto md:max-h-[85vh] md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col z-10"
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-md bg-white rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
             >
-              {/* Top Bar */}
-              <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-white shrink-0">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
-                    <BookOpen size={14} />
-                  </div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                   <h1 className="text-lg font-bold text-stone-900">
                     {isLoginView ? (authMode === 'login' ? 'Masuk ke Akun' : 'Buat Akun Baru') : 'Profil & Akun'}
                   </h1>
@@ -181,6 +206,29 @@ export default function ProfileModal({
                       </p>
                     </div>
 
+                    {/* Quick Role Fill Presets */}
+                    <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200/80 mb-5">
+                      <span className="text-[11px] font-bold text-stone-500 block mb-2">Pilihan Akun Demo (Uji RBAC):</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickDemoFill('admin')}
+                          className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <ShieldCheck size={14} className="text-emerald-600" />
+                          <span>Akun Admin</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickDemoFill('user')}
+                          className="py-2 px-2.5 bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <User size={14} className="text-stone-500" />
+                          <span>Akun Pembaca</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <form onSubmit={handleAuthSubmit} className="space-y-4">
                       <div>
                         <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5 ml-1">
@@ -229,32 +277,20 @@ export default function ProfileModal({
                             <Lock size={16} />
                           </div>
                           <input 
-                            type={showPassword ? 'text' : 'password'} 
+                            type={showPassword ? 'text' : 'password'}
                             value={tempPassword}
                             onChange={(e) => setTempPassword(e.target.value)}
-                            className="w-full pl-10 pr-10 py-3 rounded-2xl border border-stone-200 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 outline-none transition-all text-sm text-stone-900"
+                            className="w-full pl-10 pr-12 py-3 rounded-2xl border border-stone-200 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 outline-none transition-all text-sm text-stone-900"
                             placeholder="••••••••"
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 p-1 text-stone-400 hover:text-stone-600"
+                            className="absolute right-3.5 text-stone-400 hover:text-stone-600"
                           >
                             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                           </button>
                         </div>
-                      </div>
-
-                      {/* Demo Quick Fill */}
-                      <div className="flex justify-end pt-1">
-                        <button
-                          type="button"
-                          onClick={handleQuickDemoFill}
-                          className="text-[11px] font-semibold text-emerald-700 hover:underline flex items-center gap-1"
-                        >
-                          <Sparkles size={12} className="text-amber-500" />
-                          <span>Isi Akun Cepat</span>
-                        </button>
                       </div>
 
                       {/* Primary Submit Button */}
@@ -306,16 +342,20 @@ export default function ProfileModal({
                         </div>
                       </div>
 
-                      {/* Avatar */}
+                      {/* Avatar with Role Badge Indicator */}
                       <div className="relative z-10 mb-4">
-                        <div className="w-24 h-24 rounded-full bg-emerald-50 flex items-center justify-center overflow-hidden shadow-xl ring-4 ring-white group-hover/header:ring-emerald-100 transition-all">
-                          <div className="text-emerald-600/40">
-                            <CircleUserRound size={72} strokeWidth={1.5} />
+                        <div className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden shadow-xl ring-4 transition-all ${
+                          isUserAdmin 
+                            ? 'bg-emerald-100/70 ring-emerald-300' 
+                            : 'bg-emerald-50 ring-white group-hover/header:ring-emerald-100'
+                        }`}>
+                          <div className={isUserAdmin ? 'text-emerald-700' : 'text-emerald-600/40'}>
+                            {isUserAdmin ? <ShieldCheck size={56} /> : <CircleUserRound size={72} strokeWidth={1.5} />}
                           </div>
                         </div>
                       </div>
 
-                      {/* User Info & Quick Auth CTA */}
+                      {/* User Info & Role Badge */}
                       <div className="relative z-10 text-center px-6">
                         {username ? (
                           <>
@@ -323,9 +363,12 @@ export default function ProfileModal({
                               {username}
                             </h2>
                             <p className="text-stone-500 text-xs font-medium mt-0.5">{email}</p>
-                            <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                              Akun Terhubung
-                            </span>
+                            
+                            <div className="flex items-center justify-center gap-2 mt-2">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${roleMeta.badgeClass}`}>
+                                {roleMeta.name}
+                              </span>
+                            </div>
                           </>
                         ) : (
                           <div className="flex flex-col items-center">
@@ -362,9 +405,40 @@ export default function ProfileModal({
                       </div>
                     </div>
 
+                    {/* RBAC Role Switch Tool for Live Demonstration */}
+                    {username && (
+                      <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-stone-500">Peran Akun (Uji RBAC):</span>
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => switchUserRole('admin')}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                              currentRole === 'admin'
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
+                            }`}
+                          >
+                            Admin
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => switchUserRole('user')}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                              currentRole === 'user'
+                                ? 'bg-stone-800 text-white shadow-xs'
+                                : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
+                            }`}
+                          >
+                            User Biasa
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Menu List */}
                     <div className="py-2">
-                      {menuItems.map((item, index) => (
+                      {menuItems.map((item: any, index) => (
                         item.divider ? (
                           <div key={`divider-${index}`} className="my-1.5 border-t border-stone-100" />
                         ) : (
@@ -374,11 +448,13 @@ export default function ProfileModal({
                             onClick={() => item.action?.()}
                             className={`w-full flex items-center justify-between px-6 py-3.5 hover:bg-stone-50 active:bg-stone-100 transition-colors group text-left ${
                               item.isDestructive ? 'hover:bg-red-50/50' : ''
-                            }`}
+                            } ${item.highlight ? 'bg-emerald-50/40 hover:bg-emerald-50/80' : ''}`}
                           >
                             <div className="flex items-center gap-4">
                               <div className={`transition-colors ${
-                                item.isDestructive 
+                                item.highlight
+                                  ? 'text-emerald-700'
+                                  : item.isDestructive 
                                   ? 'text-red-500 group-hover:text-red-600' 
                                   : item.isLogout
                                   ? 'text-stone-400 group-hover:text-red-600'
@@ -388,7 +464,9 @@ export default function ProfileModal({
                               </div>
                               <div>
                                 <span className={`text-sm font-semibold block ${
-                                  item.isDestructive 
+                                  item.highlight
+                                    ? 'text-emerald-950 font-bold'
+                                    : item.isDestructive 
                                     ? 'text-red-600' 
                                     : item.isLogout 
                                     ? 'text-stone-700 group-hover:text-red-600' 
@@ -397,7 +475,7 @@ export default function ProfileModal({
                                   {item.label}
                                 </span>
                                 {item.desc && (
-                                  <span className="text-[11px] text-stone-400 block font-normal">
+                                  <span className={`text-[11px] block font-normal ${item.highlight ? 'text-emerald-700/80' : 'text-stone-400'}`}>
                                     {item.desc}
                                   </span>
                                 )}
@@ -405,7 +483,9 @@ export default function ProfileModal({
                             </div>
 
                             {item.badge && (
-                              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-xs font-bold">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                item.highlight ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600'
+                              }`}>
                                 {item.badge}
                               </span>
                             )}
@@ -433,4 +513,3 @@ export default function ProfileModal({
     </>
   );
 }
-

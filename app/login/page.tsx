@@ -56,10 +56,13 @@ export default function LoginPage() {
       // Simulate real auth handshake
       await new Promise((resolve) => setTimeout(resolve, 600));
 
-      // Save user state and broadcast change
-      loginUserAccount(username, email);
+      // Save user state with appropriate role and broadcast change
+      const isRoleAdmin = email.trim().toLowerCase().startsWith('admin@') || username.toLowerCase() === 'admin';
+      loginUserAccount(username, email, isRoleAdmin ? 'admin' : 'user');
 
-      setSuccessMessage(`Selamat datang kembali, ${username}!`);
+      setSuccessMessage(isRoleAdmin 
+        ? `Selamat datang kembali, Administrator ${username}!` 
+        : `Selamat datang kembali, ${username}!`);
 
       setTimeout(() => {
         router.push('/');
@@ -268,14 +271,34 @@ export default function LoginPage() {
                 <span className="font-medium">Ingat perangkat ini</span>
               </label>
 
-              <button
-                type="button"
-                onClick={handleQuickDemo}
-                className="text-[11px] font-semibold text-stone-500 hover:text-emerald-700 flex items-center gap-1 bg-stone-100 hover:bg-stone-200/80 px-2.5 py-1 rounded-lg transition-colors"
-              >
-                <Sparkles size={12} className="text-amber-500" />
-                <span>Isi Akun Demo</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('Pembaca Setia');
+                    setEmail('pembaca@bookly.id');
+                    setPassword('demo12345');
+                  }}
+                  className="text-[11px] font-semibold text-stone-500 hover:text-emerald-700 flex items-center gap-1 bg-stone-100 hover:bg-stone-200/80 px-2 py-1 rounded-lg transition-colors"
+                  title="Isi Akun Pengguna Biasa"
+                >
+                  <User size={11} className="text-stone-500" />
+                  <span>Demo User</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('Admin Bookly');
+                    setEmail('admin@bookly.id');
+                    setPassword('admin12345');
+                  }}
+                  className="text-[11px] font-bold text-emerald-800 hover:text-emerald-900 flex items-center gap-1 bg-emerald-100/70 hover:bg-emerald-200/70 border border-emerald-300/60 px-2 py-1 rounded-lg transition-colors"
+                  title="Isi Akun Administrator (Akses Penuh)"
+                >
+                  <ShieldCheck size={11} className="text-emerald-600" />
+                  <span>Demo Admin</span>
+                </button>
+              </div>
             </div>
 
             {/* Primary Action Button */}

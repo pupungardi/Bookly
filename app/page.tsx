@@ -15,6 +15,8 @@ import {
   Download, 
   SearchX, 
   Filter, 
+  SlidersHorizontal,
+  X,
   ChevronLeft, 
   ChevronRight, 
   Loader2, 
@@ -30,7 +32,9 @@ import ProfileModal from '@/components/ProfileModal';
 import Toast from '@/components/ui/Toast';
 import EmptyCatalogState from '@/components/EmptyCatalogState';
 import AdminBookManagementModal from '@/components/AdminBookManagementModal';
+import CatalogFilterModal from '@/components/CatalogFilterModal';
 import { getStoredUserState, loginUserAccount, logoutUserAccount } from '@/lib/auth-storage';
+import { isAdmin } from '@/lib/rbac';
 
 export default function Home() {
   const router = useRouter();
@@ -51,6 +55,7 @@ export default function Home() {
   const [offlineSort, setOfflineSort] = useState<'date_desc' | 'date_asc' | 'title_asc' | 'title_desc' | 'author_asc' | 'author_desc'>('date_desc');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
@@ -86,10 +91,23 @@ export default function Home() {
 
     handleSync();
 
+    // Check for access denied redirect
+    const timer = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('access_denied') === 'admin') {
+          showToast('Akses Ditolak (403): Hak akses Administrator diperlukan untuk membuka panel Admin.', 'error');
+          // Clean URL parameter without reloading
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    }, 100);
+
     window.addEventListener('bookly_user_state_changed', handleSync);
     window.addEventListener('storage', handleSync);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('bookly_user_state_changed', handleSync);
       window.removeEventListener('storage', handleSync);
     };
@@ -284,6 +302,18 @@ export default function Home() {
   }, [userState.lastReadBookId, userState.lastRead]);
 
   const isSearchOrFiltered = Boolean(searchQuery.trim() || genre || year || sort);
+  const activeFilterCount = (genre ? 1 : 0) + (sort ? 1 : 0) + (year ? 1 : 0);
+
+  const getSortLabel = (s: string) => {
+    switch (s) {
+      case 'newest': return 'Terbaru';
+      case 'oldest': return 'Terlama';
+      case 'title_asc': return 'Judul (A-Z)';
+      case 'title_desc': return 'Judul (Z-A)';
+      case 'author_asc': return 'Penulis (A-Z)';
+      default: return 'Urutan';
+    }
+  };
 
   return (
     <main className="min-h-screen pb-24 bg-[#FAFAF9] text-stone-900">
@@ -292,8 +322,17 @@ export default function Home() {
         activeTab={activeTab} 
         setActiveTab={handleTabChange} 
         onProfileClick={() => setIsProfileOpen(true)}
-        onAdminClick={() => setIsAdminModalOpen(true)}
+        onAdminClick={() => {
+          if (isAdmin(userState)) {
+            setIsAdminModalOpen(true);
+          } else {
+            showToast('Akses Ditolak (403): Anda memerlukan izin Administrator.', 'error');
+            setIsProfileOpen(true);
+          }
+        }}
         catalogCount={totalCatalogCount}
+        isAdmin={isAdmin(userState)}
+        userRole={userState.role}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -327,69 +366,96 @@ export default function Home() {
 
         {/* Filters Bar for Active Catalog */}
         {activeTab === 'all' && (
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-4 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/80 shadow-xs">
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-              <div className="flex items-center gap-1.5 text-stone-500 bg-stone-100/90 px-3 py-1.5 rounded-xl text-xs font-bold">
-                <Filter size={14} />
-                <span>Filter</span>
-              </div>
-              
-              {/* Dynamic Genre Dropdown */}
-              <select 
-                value={genre} 
-                onChange={(e) => handleGenreChange(e.target.value)}
-                className="bg-stone-50 hover:bg-stone-100/80 border border-stone-200/90 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer transition-colors"
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/80 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              {/* Unified Single Filter Button */}
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(true)}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap shrink-0 ${
+                  activeFilterCount > 0
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/80'
+                    : 'bg-stone-50 hover:bg-stone-100/90 text-stone-700 border border-stone-200/90'
+                }`}
+                aria-label="Buka filter dan pengurutan katalog"
+                aria-expanded={isFilterModalOpen}
               >
-                <option value="">All Categories</option>
-                {availableGenres.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
+                <SlidersHorizontal size={14} className={`shrink-0 ${activeFilterCount > 0 ? 'text-white' : 'text-emerald-600'}`} />
+                <span className="whitespace-nowrap">Filter &amp; Urutkan</span>
+                {activeFilterCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-extrabold rounded-full bg-white text-emerald-800 shadow-xs shrink-0">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
 
-              {/* Sort Dropdown */}
-              <select 
-                value={sort} 
-                onChange={(e) => handleSortChange(e.target.value)}
-                className="bg-stone-50 hover:bg-stone-100/80 border border-stone-200/90 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer transition-colors"
-              >
-                <option value="">Sort By</option>
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="title_asc">Title (A - Z)</option>
-                <option value="title_desc">Title (Z - A)</option>
-                <option value="author_asc">Author (A - Z)</option>
-              </select>
+              {/* Active Filter Indicators */}
+              {genre && (
+                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-2.5 py-1 rounded-xl text-xs font-bold whitespace-nowrap shrink-0">
+                  <span className="whitespace-nowrap">Kategori: {genre}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => handleGenreChange('')} 
+                    className="hover:text-emerald-950 hover:bg-emerald-200/60 rounded-md p-0.5 transition-colors cursor-pointer shrink-0"
+                    aria-label={`Hapus filter kategori ${genre}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
 
-              {/* Year Filter */}
-              <input 
-                type="number"
-                placeholder="Year"
-                value={year}
-                onChange={(e) => handleYearChange(e.target.value)}
-                className="w-20 bg-stone-50 border border-stone-200/90 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
+              {sort && (
+                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200/80 px-2.5 py-1 rounded-xl text-xs font-bold whitespace-nowrap shrink-0">
+                  <span className="whitespace-nowrap">Urutan: {getSortLabel(sort)}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => handleSortChange('')} 
+                    className="hover:text-blue-950 hover:bg-blue-200/60 rounded-md p-0.5 transition-colors cursor-pointer shrink-0"
+                    aria-label="Hapus filter urutan"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {year && (
+                <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200/80 px-2.5 py-1 rounded-xl text-xs font-bold whitespace-nowrap shrink-0">
+                  <span className="whitespace-nowrap">Tahun: {year}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => handleYearChange('')} 
+                    className="hover:text-amber-950 hover:bg-amber-200/60 rounded-md p-0.5 transition-colors cursor-pointer shrink-0"
+                    aria-label="Hapus filter tahun"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
 
               {isSearchOrFiltered && (
                 <button 
                   type="button"
                   onClick={clearFilters}
-                  className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 hover:underline cursor-pointer"
+                  className="text-xs font-bold text-stone-500 hover:text-red-600 flex items-center gap-1 hover:underline cursor-pointer px-1 py-1 transition-colors whitespace-nowrap shrink-0"
+                  aria-label="Reset semua filter dan pencarian"
                 >
-                  <RotateCcw size={12} />
-                  <span>Reset</span>
+                  <RotateCcw size={12} className="shrink-0" />
+                  <span className="whitespace-nowrap">Reset Semua</span>
                 </button>
               )}
             </div>
 
-            {/* Quick Upload CTA button */}
-            <button
-              type="button"
-              onClick={() => setIsAdminModalOpen(true)}
-              className="hidden md:flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
-            >
-              <PlusCircle size={14} />
-              <span>Add eBook</span>
-            </button>
+            {/* Quick Upload CTA button - Only for Administrator */}
+            {isAdmin(userState) && (
+              <button
+                type="button"
+                onClick={() => setIsAdminModalOpen(true)}
+                className="hidden md:flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <PlusCircle size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">Add eBook</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -465,7 +531,16 @@ export default function Home() {
                 searchQuery={searchQuery}
                 genre={genre}
                 onClearFilters={clearFilters}
-                onOpenUpload={() => setIsAdminModalOpen(true)}
+                onOpenUpload={() => {
+                  if (isAdmin(userState)) {
+                    setIsAdminModalOpen(true);
+                  } else {
+                    showToast('Akses Ditolak (403): Hanya Administrator yang dapat menambah buku.', 'error');
+                  }
+                }}
+                isAdmin={isAdmin(userState)}
+                onRefresh={loadBooks}
+                onLoginClick={() => setIsProfileOpen(true)}
               />
             ) : activeTab === 'bookmarks' ? (
               <motion.div 
@@ -688,6 +763,21 @@ export default function Home() {
         catalogBooks={apiBooks}
         onCatalogChanged={loadBooks}
         onShowToast={showToast}
+      />
+
+      {/* Catalog Filter & Sort Modal */}
+      <CatalogFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        genre={genre}
+        onGenreChange={handleGenreChange}
+        sort={sort}
+        onSortChange={handleSortChange}
+        year={year}
+        onYearChange={handleYearChange}
+        availableGenres={availableGenres}
+        totalResults={displayBooks.length}
+        onReset={clearFilters}
       />
 
       {/* Action Toast Notifications */}

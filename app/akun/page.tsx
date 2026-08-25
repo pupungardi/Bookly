@@ -20,11 +20,13 @@ import {
   ShieldCheck,
   CircleUserRound,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getStoredUserState, logoutUserAccount } from '@/lib/auth-storage';
+import { getStoredUserState, logoutUserAccount, switchUserRole } from '@/lib/auth-storage';
 import { UserState } from '@/types/book';
+import { isAdmin, ROLE_METADATA } from '@/lib/rbac';
 import DeleteBookDataModal from '@/components/DeleteBookDataModal';
 import Toast from '@/components/ui/Toast';
 
@@ -62,6 +64,10 @@ export default function AkunPage() {
       router.push('/');
     }, 400);
   };
+
+  const isUserAdmin = isAdmin(userState);
+  const currentRole = userState.role || 'user';
+  const roleMeta = ROLE_METADATA[currentRole];
 
   const downloadsCount = userState.downloads?.length || 0;
   const bookmarksCount = userState.bookmarks?.length || 0;
@@ -102,8 +108,10 @@ export default function AkunPage() {
           className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-stone-200/80 relative overflow-hidden"
         >
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm">
-              <CircleUserRound size={44} strokeWidth={1.5} />
+            <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${
+              isUserAdmin ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            }`}>
+              {isUserAdmin ? <ShieldCheck size={40} /> : <CircleUserRound size={44} strokeWidth={1.5} />}
             </div>
 
             <div className="flex-1 min-w-0">
@@ -111,14 +119,14 @@ export default function AkunPage() {
                 <>
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold text-stone-900 truncate">{userState.username}</h2>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      Aktif
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${roleMeta.badgeClass}`}>
+                      {roleMeta.name}
                     </span>
                   </div>
                   <p className="text-stone-500 text-xs sm:text-sm truncate mt-0.5">{userState.email}</p>
                   <p className="text-[11px] text-stone-400 mt-1 flex items-center gap-1">
                     <ShieldCheck size={12} className="text-emerald-600" />
-                    <span>Akun tersinkronisasi ke penyimpanan lokal & cloud</span>
+                    <span>Tersinkronisasi dengan RBAC Matrix & Auth Token</span>
                   </p>
                 </>
               ) : (
@@ -145,9 +153,66 @@ export default function AkunPage() {
               )}
             </div>
           </div>
+
+          {/* Quick RBAC Role Switch for Testing & Verification */}
+          {userState.username && (
+            <div className="mt-5 pt-4 border-t border-stone-100 flex items-center justify-between">
+              <span className="text-xs text-stone-500 font-semibold">Simulasi Peran RBAC:</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => switchUserRole('admin')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    currentRole === 'admin' 
+                      ? 'bg-emerald-600 text-white shadow-xs' 
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchUserRole('user')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    currentRole === 'user' 
+                      ? 'bg-stone-800 text-white shadow-xs' 
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  User Biasa
+                </button>
+              </div>
+            </div>
+          )}
         </motion.div>
 
-        {/* Data & Storage Management Section (Highlighting User's Delete Book Data Feature) */}
+        {/* Admin Shortcut Box (Only for Admin) */}
+        {isUserAdmin && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-5 rounded-3xl bg-emerald-950 text-white flex items-center justify-between border border-emerald-800/60 shadow-md"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-white">Panel Administrator</h4>
+                <p className="text-xs text-stone-300">Kelola buku, edit data katalog & otorisasi</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/admin')}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-stone-950 rounded-xl text-xs font-bold transition-all active:scale-95"
+            >
+              Buka Panel
+            </button>
+          </motion.div>
+        )}
+
+        {/* Data & Storage Management Section */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -221,29 +286,26 @@ export default function AkunPage() {
             <button
               type="button"
               onClick={() => setIsDeleteModalOpen(true)}
-              className="w-full sm:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Trash2 size={14} />
-              <span>Hapus Data Buku</span>
+              Hapus Data
             </button>
           </div>
         </motion.div>
 
-        {/* General Settings */}
-        <motion.div 
+        {/* Settings Links */}
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-stone-200/80 space-y-3"
+          className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-stone-200/80 space-y-1.5"
         >
-          <h3 className="font-bold text-stone-900 text-sm sm:text-base mb-2">Preferensi & Keamanan</h3>
-
           <div 
             onClick={() => router.push('/profile')}
             className="w-full p-3.5 rounded-2xl flex items-center justify-between hover:bg-stone-50 active:bg-stone-100 transition-colors cursor-pointer border border-stone-100"
           >
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 bg-emerald-50 text-emerald-700 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
                 <User size={18} />
               </div>
               <div>
@@ -327,4 +389,3 @@ export default function AkunPage() {
     </div>
   );
 }
-

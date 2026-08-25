@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { CircleUserRound, Database, Plus } from 'lucide-react';
+import { CircleUserRound, Database, Shield, ShieldCheck } from 'lucide-react';
+import { UserRole } from '@/types/book';
 
 interface NavbarProps {
   activeTab: string;
@@ -9,6 +10,8 @@ interface NavbarProps {
   onProfileClick: () => void;
   onAdminClick?: () => void;
   catalogCount?: number;
+  isAdmin?: boolean;
+  userRole?: UserRole;
 }
 
 export default function Navbar({ 
@@ -17,6 +20,8 @@ export default function Navbar({
   onProfileClick,
   onAdminClick,
   catalogCount = 0,
+  isAdmin = false,
+  userRole = 'user',
 }: NavbarProps) {
   return (
     <nav className="relative z-50 bg-white border-b border-stone-200 px-4 py-3">
@@ -54,17 +59,17 @@ export default function Navbar({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5">
-          {/* Admin eBook Studio CMS Button */}
-          {onAdminClick && (
+          {/* Admin eBook Studio CMS Button - Protected & Only Visible to Authorized Admins */}
+          {isAdmin && onAdminClick && (
             <button
               type="button"
               onClick={onAdminClick}
-              className="px-3.5 py-2 bg-stone-100 hover:bg-emerald-50 hover:text-emerald-700 text-stone-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border border-stone-200/80 cursor-pointer active:scale-95 shadow-xs"
-              title="Open Admin eBook Management Studio"
+              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border border-emerald-200 cursor-pointer active:scale-95 shadow-xs"
+              title="Buka Panel Administrator (RBAC Terotorisasi)"
             >
-              <Database size={15} className="text-emerald-600" />
+              <ShieldCheck size={15} className="text-emerald-600" />
               <span className="hidden sm:inline">Admin CMS</span>
-              <span className="bg-stone-200/80 text-stone-700 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+              <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
                 {catalogCount}
               </span>
             </button>
@@ -75,7 +80,12 @@ export default function Navbar({
             type="button"
             onClick={onProfileClick}
             aria-label="User profile & settings"
-            className="w-10 h-10 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shrink-0 cursor-pointer active:scale-95 shadow-xs"
+            className={`w-10 h-10 rounded-xl bg-stone-50 border flex items-center justify-center transition-all shrink-0 cursor-pointer active:scale-95 shadow-xs ${
+              isAdmin 
+                ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100/50' 
+                : 'border-stone-200 text-stone-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'
+            }`}
+            title={isAdmin ? 'Profil Administrator' : 'Profil Pengguna'}
           >
             <CircleUserRound size={20} strokeWidth={1.8} />
           </button>

@@ -190,14 +190,14 @@ export default function DeleteBookDataModal({
 
               {/* Data Items Selection */}
               <div>
-                <div className="flex items-center justify-between mb-2.5 px-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                <div className="flex items-center justify-between mb-2.5 px-1 gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-500 truncate">
                     Pilih Data yang Akan Dihapus
                   </label>
                   <button
                     type="button"
                     onClick={() => handleSelectAll(selectedCount !== totalItems)}
-                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
+                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     {selectedCount === totalItems ? 'Batal Pilih Semua' : 'Pilih Semua'}
                   </button>
@@ -359,7 +359,7 @@ export default function DeleteBookDataModal({
                   type="button"
                   onClick={handleModalClose}
                   disabled={isDeleting}
-                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 text-sm font-semibold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 text-sm font-semibold transition-all shadow-sm active:scale-95 disabled:opacity-50 whitespace-nowrap cursor-pointer text-center"
                 >
                   Batal
                 </button>
@@ -369,7 +369,7 @@ export default function DeleteBookDataModal({
                   type="button"
                   onClick={handleConfirmDelete}
                   disabled={isDeleteDisabled}
-                  className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 ${
+                  className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer ${
                     isDeleteDisabled
                       ? 'bg-stone-300 shadow-none cursor-not-allowed text-stone-500'
                       : isSuccess
@@ -379,18 +379,18 @@ export default function DeleteBookDataModal({
                 >
                   {isDeleting ? (
                     <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Menghapus...</span>
+                      <Loader2 size={16} className="animate-spin shrink-0" />
+                      <span className="whitespace-nowrap">Menghapus...</span>
                     </>
                   ) : isSuccess ? (
                     <>
-                      <Check size={16} />
-                      <span>Selesai!</span>
+                      <Check size={16} className="shrink-0" />
+                      <span className="whitespace-nowrap">Selesai!</span>
                     </>
                   ) : (
                     <>
-                      <Trash2 size={16} />
-                      <span>Hapus Data</span>
+                      <Trash2 size={16} className="shrink-0" />
+                      <span className="whitespace-nowrap">Hapus Data</span>
                     </>
                   )}
                 </button>

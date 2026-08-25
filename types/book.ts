@@ -27,6 +27,17 @@ export interface Review {
   username: string;
 }
 
+export type UserRole = 'admin' | 'editor' | 'user' | 'guest';
+
+export type Permission = 
+  | 'books:read' 
+  | 'books:create' 
+  | 'books:edit' 
+  | 'books:delete' 
+  | 'books:manage' 
+  | 'admin:access' 
+  | 'users:manage';
+
 export interface UserState {
   bookmarks: string[]; // Book IDs
   downloads: Book[]; // Full Book objects for offline access
@@ -35,5 +46,9 @@ export interface UserState {
   fontSize: number;
   username?: string;
   email?: string;
+  role?: UserRole;
+  token?: string;
+  permissions?: Permission[];
+  roleAssignedAt?: string;
   reviews?: { [bookId: string]: Review[] };
 }
