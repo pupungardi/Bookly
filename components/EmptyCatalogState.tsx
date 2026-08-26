@@ -129,15 +129,15 @@ export default function EmptyCatalogState({
         </div>
 
         {/* Guidance */}
-        <div className="mt-8 pt-6 border-t border-stone-200/60 w-full flex items-center justify-center gap-6 text-xs text-stone-400">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            Format PDF &amp; Teks Didukung
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-            Sinkronisasi Katalog Real-time
-          </span>
+        <div className="mt-8 pt-6 border-t border-stone-200/60 w-full flex flex-wrap items-center justify-center gap-x-6 gap-y-2.5 text-[11px] sm:text-xs font-semibold text-stone-500">
+          <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true"></span>
+            <span className="inline-block whitespace-nowrap font-medium text-stone-600">Format PDF &amp; Teks Didukung</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-hidden="true"></span>
+            <span className="inline-block whitespace-nowrap font-medium text-stone-600">Sinkronisasi Katalog Real-time</span>
+          </div>
         </div>
       </motion.div>
     );
@@ -180,34 +180,34 @@ export default function EmptyCatalogState({
               window.location.reload();
             }
           }}
-          className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
         >
-          <RefreshCw size={16} />
-          <span>Muat Ulang Katalog</span>
+          <RefreshCw size={16} className="shrink-0" />
+          <span className="whitespace-nowrap">Muat Ulang Katalog</span>
         </button>
 
         {onLoginClick && (
           <button
             type="button"
             onClick={onLoginClick}
-            className="w-full sm:w-auto px-5 py-3 bg-white hover:bg-stone-100 border border-stone-200 active:scale-95 text-stone-700 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+            className="w-full sm:w-auto px-5 py-3 bg-white hover:bg-stone-100 border border-stone-200 active:scale-95 text-stone-700 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs whitespace-nowrap"
           >
-            <LogIn size={16} className="text-stone-500" />
-            <span>Masuk ke Akun</span>
+            <LogIn size={16} className="text-stone-500 shrink-0" />
+            <span className="whitespace-nowrap">Masuk ke Akun</span>
           </button>
         )}
       </div>
 
       {/* Guidance footer */}
-      <div className="mt-8 pt-6 border-t border-stone-200/60 w-full flex items-center justify-center gap-6 text-xs text-stone-400">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          Perpustakaan Digital Bookly
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-          Akses Offline &amp; Bookmark
-        </span>
+      <div className="mt-8 pt-6 border-t border-stone-200/60 w-full flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-stone-500">
+        <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true"></span>
+          <span className="whitespace-nowrap">Perpustakaan Digital Bookly</span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-hidden="true"></span>
+          <span className="whitespace-nowrap">Akses Offline &amp; Bookmark</span>
+        </div>
       </div>
     </motion.div>
   );
