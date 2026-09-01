@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { BookOpen, PlusCircle, SearchX, RotateCcw, Sparkles, BookPlus, RefreshCw, LogIn, ShieldCheck } from 'lucide-react';
+import PlatformFeatureBadges from './PlatformFeatureBadges';
 
 interface EmptyCatalogStateProps {
   isSearchOrFiltered: boolean;
@@ -128,16 +129,9 @@ export default function EmptyCatalogState({
           </button>
         </div>
 
-        {/* Guidance */}
-        <div className="mt-8 pt-6 border-t border-stone-200/60 w-full flex flex-wrap items-center justify-center gap-x-6 gap-y-2.5 text-[11px] sm:text-xs font-semibold text-stone-500">
-          <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true"></span>
-            <span className="inline-block whitespace-nowrap font-medium text-stone-600">Format PDF &amp; Teks Didukung</span>
-          </div>
-          <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-hidden="true"></span>
-            <span className="inline-block whitespace-nowrap font-medium text-stone-600">Sinkronisasi Katalog Real-time</span>
-          </div>
+        {/* Platform Capabilities & Features */}
+        <div className="mt-8 pt-6 border-t border-stone-200/60 w-full flex flex-col items-center justify-center">
+          <PlatformFeatureBadges variant="pill" />
         </div>
       </motion.div>
     );

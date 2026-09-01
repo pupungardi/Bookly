@@ -33,6 +33,7 @@ import Toast from '@/components/ui/Toast';
 import EmptyCatalogState from '@/components/EmptyCatalogState';
 import AdminBookManagementModal from '@/components/AdminBookManagementModal';
 import CatalogFilterModal from '@/components/CatalogFilterModal';
+import PlatformFeatureBadges from '@/components/PlatformFeatureBadges';
 import { getStoredUserState, loginUserAccount, logoutUserAccount } from '@/lib/auth-storage';
 import { isAdmin } from '@/lib/rbac';
 
@@ -459,10 +460,10 @@ export default function Home() {
           </div>
         )}
 
-        {/* Section Title Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 tracking-tight">
+        {/* Section Title Header & Features */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 tracking-tight whitespace-nowrap">
               {activeTab === 'all' 
                 ? (genre ? `${genre} eBooks` : 'Explore Catalog')
                 : activeTab === 'bookmarks' 
@@ -471,6 +472,12 @@ export default function Home() {
                     ? 'Offline Library'
                     : 'Search Results'}
             </h2>
+
+            {activeTab === 'all' && (
+              <div className="hidden lg:flex items-center ml-2">
+                <PlatformFeatureBadges variant="pill" />
+              </div>
+            )}
 
             {activeTab === 'downloads' && (
               <select 
@@ -486,7 +493,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-end sm:self-auto">
             {isLoading && <Loader2 className="animate-spin text-emerald-600" size={18} />}
             <span className="text-xs text-stone-500 font-semibold bg-stone-100 px-2.5 py-1 rounded-lg">
               {displayBooks.length} {displayBooks.length === 1 ? 'eBook' : 'eBooks'}
