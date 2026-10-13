@@ -146,7 +146,7 @@ export default function ProfileModal({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-md bg-white rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
+              className="relative w-full h-full max-w-none max-h-none bg-white shadow-2xl overflow-hidden z-10 flex flex-col rounded-none"
             >
               {/* Modal Header */}
               <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
