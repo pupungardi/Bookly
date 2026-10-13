@@ -108,10 +108,11 @@ export default function ProfileModal({
 
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (tempUsername.trim() && tempEmail.trim()) {
+    if (tempUsername.trim() && tempEmail.trim() && tempPassword.trim()) {
       onLogin(tempUsername.trim(), tempEmail.trim());
       setIsLoginView(false);
       setTempPassword('');
+      onLiveChatClick?.();
     }
   };
 
