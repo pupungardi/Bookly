@@ -1,13 +1,12 @@
 'use client';
 
 import React from 'react';
-import { CircleUserRound, Database, Shield, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { UserRole } from '@/types/book';
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: 'all' | 'bookmarks' | 'downloads' | 'search') => void;
-  onProfileClick: () => void;
   onAdminClick?: () => void;
   catalogCount?: number;
   isAdmin?: boolean;
@@ -75,20 +74,6 @@ export default function Navbar({
             </button>
           )}
 
-          {/* Profile / Account Button */}
-          <button 
-            type="button"
-            onClick={onProfileClick}
-            aria-label="User profile & settings"
-            className={`w-10 h-10 rounded-xl bg-stone-50 border flex items-center justify-center transition-all shrink-0 cursor-pointer active:scale-95 shadow-xs ${
-              isAdmin 
-                ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100/50' 
-                : 'border-stone-200 text-stone-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'
-            }`}
-            title={isAdmin ? 'Profil Administrator' : 'Profil Pengguna'}
-          >
-            <CircleUserRound size={20} strokeWidth={1.8} />
-          </button>
         </div>
       </div>
     </nav>

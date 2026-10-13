@@ -323,8 +323,7 @@ export default function Home() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onProfileClick={() => setIsProfileOpen(true)}
-        onAdminClick={() => setIsAdminModalOpen(true)}
+              onAdminClick={() => setIsAdminModalOpen(true)}
         catalogCount={totalCatalogCount}
         isAdmin={isAdmin(userState)}
         userRole={userState.role}
