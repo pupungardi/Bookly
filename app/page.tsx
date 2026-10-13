@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Book, UserState } from '@/types/book';
-import Navbar from '@/components/Navbar';
 import BookCard from '@/components/BookCard';
 import BookDetail from '@/components/BookDetail';
 import ContinueReading from '@/components/ContinueReading';
@@ -10,7 +9,8 @@ import BookReader from '@/components/BookReader';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { 
-  BookOpen, 
+  Compass,
+  CircleUserRound,
   Heart, 
   Download, 
   SearchX, 
@@ -79,8 +79,9 @@ export default function Home() {
   });
 
   const navItems = [
-    { name: 'All Books', id: 'all', icon: BookOpen },
+    { name: 'Explore', id: 'all', icon: Compass },
     { name: 'Search', id: 'search', icon: Search },
+    { name: 'Profile', id: 'profile', icon: CircleUserRound },
   ];
 
   // Handle hydration and load state + listen to external state sync
@@ -318,24 +319,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen pb-24 bg-[#FAFAF9] text-stone-900">
-      {/* Top Navigation */}
-      <Navbar 
-        activeTab={activeTab} 
-        setActiveTab={handleTabChange} 
-        onProfileClick={() => setIsProfileOpen(true)}
-        onAdminClick={() => {
-          if (isAdmin(userState)) {
-            setIsAdminModalOpen(true);
-          } else {
-            showToast('Akses Ditolak (403): Anda memerlukan izin Administrator.', 'error');
-            setIsProfileOpen(true);
-          }
-        }}
-        catalogCount={totalCatalogCount}
-        isAdmin={isAdmin(userState)}
-        userRole={userState.role}
-      />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Search View Bar */}
         {activeTab === 'search' && (
