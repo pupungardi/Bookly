@@ -16,7 +16,6 @@ interface NavbarProps {
 export default function Navbar({ 
   activeTab, 
   setActiveTab, 
-  onProfileClick,
   onAdminClick,
   catalogCount = 0,
   isAdmin = false,
