@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
  * Next.js Edge Middleware for Role-Based Access Control
  * Intercepts protected admin routes before rendering
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protect /admin route

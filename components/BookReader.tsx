@@ -506,35 +506,45 @@ export default function BookReader({
                     <span className="truncate">{book.judul || book.title}.pdf</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a
-                      href={book.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-700 hover:bg-emerald-50 hover:text-emerald-700 text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-stone-600 font-bold transition-all flex items-center gap-1.5 shadow-xs"
-                      title="Buka PDF di tab baru"
-                    >
-                      <ExternalLink size={13} />
-                      <span className="hidden sm:inline">Tab Baru</span>
-                    </a>
-                    <a
-                      href={book.pdfUrl}
-                      download={`${book.judul || book.title || 'ebook'}.pdf`}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-xs"
-                      title="Unduh file PDF"
-                    >
-                      <Download size={13} />
-                      <span>Unduh</span>
-                    </a>
+                    {book.pdfUrl && (
+                      <>
+                        <a
+                          href={book.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-700 hover:bg-emerald-50 hover:text-emerald-700 text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-stone-600 font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                          title="Buka PDF di tab baru"
+                        >
+                          <ExternalLink size={13} />
+                          <span className="hidden sm:inline">Tab Baru</span>
+                        </a>
+                        <a
+                          href={book.pdfUrl}
+                          download={`${book.judul || book.title || 'ebook'}.pdf`}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                          title="Unduh file PDF"
+                        >
+                          <Download size={13} />
+                          <span>Unduh</span>
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* Embedded PDF Viewer */}
                 <div className="flex-1 w-full h-full relative bg-stone-100 dark:bg-stone-950">
-                  <iframe
-                    src={`${book.pdfUrl}#toolbar=1&navpanes=1`}
-                    title={book.judul || 'PDF Document'}
-                    className="w-full h-full border-0"
-                  />
+                  {book.pdfUrl ? (
+                    <iframe
+                      src={`${book.pdfUrl}#toolbar=1&navpanes=1`}
+                      title={book.judul || 'PDF Document'}
+                      className="w-full h-full border-0"
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-sm text-stone-500">
+                      File PDF belum tersedia.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
