@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { fetchBooks } from '@/lib/api';
 import { NavBar } from '@/components/ui/tubelight-navbar';
+import Navbar from '@/components/Navbar';
 import ProfileModal from '@/components/ProfileModal';
 import Toast from '@/components/ui/Toast';
 import EmptyCatalogState from '@/components/EmptyCatalogState';
@@ -319,6 +320,15 @@ export default function Home() {
 
   return (
     <main className="min-h-screen pb-24 bg-[#FAFAF9] text-stone-900">
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onProfileClick={() => setIsProfileOpen(true)}
+        onAdminClick={() => setIsAdminModalOpen(true)}
+        catalogCount={totalCatalogCount}
+        isAdmin={isAdmin(userState)}
+        userRole={userState.role}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Search View Bar */}
         {activeTab === 'search' && (
